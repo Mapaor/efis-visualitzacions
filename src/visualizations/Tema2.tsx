@@ -127,6 +127,12 @@ export function ShockleyRegimes() {
     <Plot xDomain={[1, 24]} yDomain={[Math.min(...invT.map(d => d.y)) - 1, Math.max(...invT.map(d => d.y)) + 1]} xLabel="1000/T (K⁻¹)" yLabel="ln σ (S/cm)" xTicks={[2, 5, 10, 20]}>
       {({ x, y }) => <LinePath data={invT} x={d => x(d.x)} y={d => y(d.y)} stroke={C.ink} strokeWidth={2.5} />}
     </Plot>
+    <p className="plot-caption">Corba fosca: conductivitat total ln σ en funció de 1000/T.</p>
+    <div className="chart-legend" aria-label="Llegenda de concentracions">
+      <span><i className="legend-line" style={{ borderColor: C.electron }} />Electrons n</span>
+      <span><i className="legend-line" style={{ borderColor: C.hole }} />Forats p</span>
+      <span><i className="legend-line legend-dashed" style={{ borderColor: C.teal }} />Intrínseca nᵢ</span>
+    </div>
     <Plot xDomain={[40, 900]} yDomain={[0, 20]} xLabel="Temperatura (K)" yLabel="Concentració (cm⁻³, escala log)" xTicks={[100, 300, 500, 700, 900]} yTicks={[0, 5, 10, 15, 20]} yFormat={v => `10${format(v, 0)}`}>
       {({ x, y }) => <Lines series={carrierSeries} x={x} y={y} />}
     </Plot>
