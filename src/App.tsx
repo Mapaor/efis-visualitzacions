@@ -1,5 +1,7 @@
 import { useState, type ReactNode } from 'react';
 import { LinePath } from '@visx/shape';
+import katex from 'katex';
+import 'katex/dist/katex.min.css';
 import { Plot, Lines } from './Charts';
 import { COLORS as C, E_G, K_B_EV, carrierDensities, diodeCurrent, format, intrinsicDensity, sample } from './physics';
 
@@ -9,6 +11,11 @@ function Range({ label, value, min, max, step, onChange, formatValue }: { label:
 
 function Card({ tag, title, children, className = '' }: { tag: string; title: string; children: ReactNode; className?: string }) {
   return <article className={`card ${className}`}><header className="card-heading"><div><span className="tag">{tag}</span><h3>{title}</h3></div></header>{children}</article>;
+}
+
+function Equation({ math }: { math: string }) {
+  const html = katex.renderToString(math, { displayMode: true, throwOnError: false, output: 'htmlAndMathml' });
+  return <div className="equation" dangerouslySetInnerHTML={{ __html: html }} />;
 }
 
 function PotentialAndOrbitals() {
@@ -37,6 +44,7 @@ function PotentialAndOrbitals() {
         </>}
       </Plot>
       <p className="plot-caption">Cada bola és un nucli atòmic. La línia negra és l’energia potencial de l’electró: cada nucli crea un pou. En acostar els àtoms, la barrera central baixa.</p>
+      <Equation math="V(x)\to-\infty\quad\text{quan }x\to x_a\text{ o }x_b" />
       <Plot xDomain={[-3.2, 3.2]} yDomain={[-2.5, 0.35]} xLabel="Posició x · orbitals híbrids" yLabel="Energia potencial V(x)" xTicks={[-distance / 2, 0, distance / 2]} yTicks={[-2, -1, 0]}>
         {({ x, y }) => <>
           <LinePath data={potential} x={d => x(d.x)} y={d => y(d.y)} stroke="#a7b1bd" strokeWidth={2} />
@@ -51,6 +59,7 @@ function PotentialAndOrbitals() {
         </>}
       </Plot>
       <p className="plot-caption">Quan la barrera queda per sota del nivell atòmic, aquest es divideix en dos: un estat enllaçant ocupat (verd) i un antienllaçant (vermell). {closePair ? 'Amb aquesta separació, la barrera ja és prou baixa.' : 'Redueix la separació amb el control.'}</p>
+      <Equation math="E_{\text{enllaçant}}<E_{\text{atòmic}}<E_{\text{antienllaçant}}" />
     </div>
   </>;
 }
@@ -75,7 +84,8 @@ function BandFormation() {
         <text x={width + 35} y={height + 35} className="plot-annotation">Les línies són nivells discrets</text>
       </>}
     </Plot>
-    <p className="plot-caption">En un cristall, cada àtom aporta nivells molt pròxims. En augmentar-ne el nombre, les línies s’espesseixen fins a formar una banda. Amplada esquemàtica fixa.</p>
+    <p className="plot-caption">En un cristall, cada àtom aporta un nivell. En augmentar-ne el nombre, els nivells s’espesseixen fins a formar una banda. Amplada esquemàtica fixa.</p>
+    <Equation math="N_{\text{àtoms}}\;\longrightarrow\;N_{\text{nivells}}\;\longrightarrow\;\text{banda}" />
   </>;
 }
 
@@ -133,6 +143,7 @@ function BandAndDos() {
     </Plot>
     </div></div>
     <div className="metric"><span>N<sub>v</sub>(E) · valència</span><strong>{format(valenceDos, 2)}</strong><span>N<sub>c</sub>(E) · conducció</span><strong>{format(conductionDos, 2)}</strong><span>Valors relatius; dins del gap, tots dos són 0.</span></div>
+    <Equation math="N_c(E)=\sqrt{\frac{E-E_g}{0.65}}\;(E\ge E_g),\qquad N_v(E)=1.12\sqrt{\frac{-E}{0.65}}\;(E\le 0)" />
   </>;
 }
 
@@ -210,8 +221,10 @@ function TransportAndDiode() {
       <Plot xDomain={[0, 0.85]} yDomain={[0, linearizedMaximum]} xLabel="Tensió directa V (V)" yLabel="ln(1 + I/I₀)" xTicks={[0, 0.2, 0.4, 0.6, 0.8]} yTicks={linearizedTicks}>
         {({ x, y }) => <LinePath data={linearized} x={d => x(d.x)} y={d => y(d.y)} stroke={C.valence} strokeWidth={2.5} />}
       </Plot>
-      <p className="plot-caption">En escala semilogarítmica, el corrent directe s’aproxima a una recta. La transformació ln(1 + I/I₀) = V/(kT/q) és una recta exacta en aquest model; la seva pendent és inversament proporcional a la temperatura.</p>
-      <div className="metric"><span>Voltatge tèrmic kT/q</span><strong>{(thermalVoltage * 1000).toFixed(1)} mV</strong><span>I = I₀ [exp(V/Vₜ) − 1]</span></div>
+      <p className="plot-caption">En escala semilogarítmica, el corrent directe s’aproxima a una recta. La transformació de sota és una recta exacta en aquest model; la pendent disminueix quan augmenta la temperatura.</p>
+      <Equation math="I=I_0\left(e^{V/V_T}-1\right),\qquad V_T=\frac{k_BT}{q}" />
+      <Equation math="\ln\left(1+\frac{I}{I_0}\right)=\frac{V}{V_T}" />
+      <div className="metric"><span>Voltatge tèrmic V<sub>T</sub></span><strong>{(thermalVoltage * 1000).toFixed(1)} mV</strong></div>
     </Card>
   </>;
 }
