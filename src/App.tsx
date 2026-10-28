@@ -11,49 +11,71 @@ function Card({ tag, title, children, className = '' }: { tag: string; title: st
   return <article className={`card ${className}`}><header className="card-heading"><div><span className="tag">{tag}</span><h3>{title}</h3></div></header>{children}</article>;
 }
 
-function OrbitalAndBands() {
+function PotentialAndOrbitals() {
   const [distance, setDistance] = useState(2.4);
-  const [atoms, setAtoms] = useState(12);
   const xValues = sample(180, -3.2, 3.2);
-  const left = xValues.map(x => Math.exp(-(((x + distance / 2) / 0.58) ** 2)));
-  const right = xValues.map(x => Math.exp(-(((x - distance / 2) / 0.58) ** 2)));
-  const bonding = xValues.map((x, i) => ({ x, y: (left[i] + right[i]) / Math.sqrt(2) }));
-  const antibonding = xValues.map((x, i) => ({ x, y: (left[i] - right[i]) / Math.sqrt(2) }));
-  const bandWidth = 0.25 + 0.35 * Math.exp(-0.8 * (distance - 1));
-  const valence = Array.from({ length: atoms }, (_, i) => -bandWidth * (i + 0.5) / atoms);
-  const conduction = Array.from({ length: atoms }, (_, i) => E_G + bandWidth * (i + 0.5) / atoms);
-
+  const potential = xValues.map(x => ({ x, y: Math.max(-2.45, -0.52 / Math.max(0.08, Math.abs(x - distance / 2)) - 0.52 / Math.max(0.08, Math.abs(x + distance / 2))) }));
+  const atomicLevel = -1.72;
+  const closePair = distance < 1.25;
+  const bondingLevel = atomicLevel - 0.16 * Math.exp(-0.75 * (distance - 1));
+  const antibondingLevel = atomicLevel + 0.16 * Math.exp(-0.75 * (distance - 1));
   return <>
-    <div className="controls two-controls">
+    <div className="controls">
       <Range label="Separació entre àtoms" value={distance} min={1} max={4} step={0.05} onChange={setDistance} formatValue={v => `${format(v, 2)} unitats`} />
-      <Range label="Nombre d’àtoms" value={atoms} min={2} max={40} step={1} onChange={setAtoms} formatValue={v => `${v}`} />
     </div>
     <div className="plot-stack">
-      <Plot xDomain={[-3.2, 3.2]} yDomain={[-0.9, 1.5]} xLabel="Posició x · orbitals atòmics discontinus" yLabel="Amplitud ψ" xTicks={[-distance / 2, 0, distance / 2]} yTicks={[0]} yFormat={() => ''}>
+      <Plot xDomain={[-3.2, 3.2]} yDomain={[-2.5, 0.35]} xLabel="Posició x · dos àtoms" yLabel="Energia potencial V(x)" xTicks={[-distance / 2, 0, distance / 2]} yTicks={[-2, -1, 0]}>
         {({ x, y }) => <>
-          <LinePath data={xValues.map((v, i) => ({ x: v, y: left[i] }))} x={d => x(d.x)} y={d => y(d.y)} stroke="#a7b1bd" strokeDasharray="4 4" />
-          <LinePath data={xValues.map((v, i) => ({ x: v, y: right[i] }))} x={d => x(d.x)} y={d => y(d.y)} stroke="#a7b1bd" strokeDasharray="4 4" />
-          <LinePath data={bonding} x={d => x(d.x)} y={d => y(d.y)} stroke={C.valence} strokeWidth={2.8} />
-          <LinePath data={antibonding} x={d => x(d.x)} y={d => y(d.y)} stroke={C.hole} strokeWidth={2.8} />
-          <text x={x(-2.9)} y={y(1.25)} fill={C.valence} className="plot-annotation">Enllaçant · sense node</text>
-          <text x={x(-2.9)} y={y(-0.68)} fill={C.hole} className="plot-annotation">Antienllaçant · node al centre</text>
+          <line x1={x(-3.2)} x2={x(3.2)} y1={y(0)} y2={y(0)} stroke="#8793a2" strokeWidth={1.2} />
+          <LinePath data={potential} x={d => x(d.x)} y={d => y(d.y)} stroke={C.ink} strokeWidth={3} />
+          <line x1={x(-3.2)} x2={x(3.2)} y1={y(atomicLevel)} y2={y(atomicLevel)} stroke={C.valence} strokeWidth={1.8} strokeDasharray="6 4" />
+          <circle cx={x(-distance / 2)} cy={y(0)} r={9} fill="#91a9c2" stroke="white" strokeWidth={2} />
+          <circle cx={x(distance / 2)} cy={y(0)} r={9} fill="#91a9c2" stroke="white" strokeWidth={2} />
+          <text x={x(-3.05)} y={y(atomicLevel) - 7} fill={C.valence} className="plot-annotation">Nivell atòmic</text>
+          <text x={x(-distance / 2)} y={y(-2.34)} textAnchor="middle" className="plot-annotation">V → −∞</text>
+          <text x={x(distance / 2)} y={y(-2.34)} textAnchor="middle" className="plot-annotation">V → −∞</text>
         </>}
       </Plot>
-      <Plot xDomain={[0, 1]} yDomain={[-0.85, 2]} xLabel={`${atoms} nivells per banda · amplada esquemàtica`} yLabel="Energia (eV)" xTicks={[]} yTicks={[0, E_G]} grid={false}>
-        {({ x, y, width, height }) => <>
-          <rect x={x(0.19)} y={y(0)} width={x(0.79) - x(0.19)} height={y(-bandWidth) - y(0)} fill={C.valence} opacity={0.12} />
-          <rect x={x(0.19)} y={y(E_G + bandWidth)} width={x(0.79) - x(0.19)} height={y(E_G) - y(E_G + bandWidth)} fill={C.conduction} opacity={0.14} />
-          {valence.map((energy, i) => <line key={`v${i}`} x1={x(0.27)} x2={x(0.72)} y1={y(energy)} y2={y(energy)} stroke={C.valence} strokeWidth={2.2} />)}
-          {conduction.map((energy, i) => <line key={`c${i}`} x1={x(0.27)} x2={x(0.72)} y1={y(energy)} y2={y(energy)} stroke={C.conduction} strokeWidth={2.2} strokeDasharray="3 2" />)}
-          <text x={x(0.49)} y={y(-bandWidth * 0.45)} textAnchor="middle" fill={C.valence} className="plot-annotation">VALÈNCIA · plena</text>
-          <text x={x(0.49)} y={y(E_G + bandWidth * 0.55)} textAnchor="middle" fill={C.conduction} className="plot-annotation">CONDUCCIÓ · buida</text>
-          <line x1={x(0.84)} x2={x(0.84)} y1={y(E_G)} y2={y(0)} stroke={C.ink} />
-          <text x={x(0.87)} y={y(0.56)} className="plot-annotation">E<tspan baselineShift="sub">g</tspan> = 1,12 eV</text>
-          <text x={width + 35} y={height + 35} className="plot-annotation">Les línies són nivells discrets</text>
+      <p className="plot-caption">Cada bola és un nucli atòmic. La línia negra és l’energia potencial de l’electró: cada nucli crea un pou. En acostar els àtoms, la barrera central baixa.</p>
+      <Plot xDomain={[-3.2, 3.2]} yDomain={[-2.5, 0.35]} xLabel="Posició x · orbitals híbrids" yLabel="Energia potencial V(x)" xTicks={[-distance / 2, 0, distance / 2]} yTicks={[-2, -1, 0]}>
+        {({ x, y }) => <>
+          <LinePath data={potential} x={d => x(d.x)} y={d => y(d.y)} stroke="#a7b1bd" strokeWidth={2} />
+          <line x1={x(-3.2)} x2={x(3.2)} y1={y(atomicLevel)} y2={y(atomicLevel)} stroke={C.muted} strokeDasharray="5 4" />
+          <line x1={x(-2.65)} x2={x(2.65)} y1={y(bondingLevel)} y2={y(bondingLevel)} stroke={C.valence} strokeWidth={2.5} />
+          <line x1={x(-2.65)} x2={x(2.65)} y1={y(antibondingLevel)} y2={y(antibondingLevel)} stroke={C.hole} strokeWidth={2.5} />
+          <circle cx={x(-distance / 2)} cy={y(0)} r={8} fill="#91a9c2" stroke="white" strokeWidth={2} />
+          <circle cx={x(distance / 2)} cy={y(0)} r={8} fill="#91a9c2" stroke="white" strokeWidth={2} />
+          <text x={x(-3.05)} y={y(bondingLevel) + 16} fill={C.valence} className="plot-annotation">Enllaçant · energia més baixa</text>
+          <text x={x(-3.05)} y={y(antibondingLevel) - 8} fill={C.hole} className="plot-annotation">Antienllaçant · energia més alta</text>
+          {!closePair && <text x={x(0)} y={y(-0.52)} textAnchor="middle" className="plot-annotation">Apropem els àtoms per superar la barrera</text>}
         </>}
       </Plot>
+      <p className="plot-caption">Quan la barrera queda per sota del nivell atòmic, aquest es divideix en dos: un estat enllaçant ocupat (verd) i un antienllaçant (vermell). {closePair ? 'Amb aquesta separació, la barrera ja és prou baixa.' : 'Redueix la separació amb el control.'}</p>
     </div>
-    <p className="insight">En acostar els àtoms, cada banda s’eixampla. Amb més àtoms, els nivells s’apropen i semblen continus. El gap del Si es manté fix en aquest esquema.</p>
+  </>;
+}
+
+function BandFormation() {
+  const [atoms, setAtoms] = useState(12);
+  const bandWidth = 0.48;
+  const valence = Array.from({ length: atoms }, (_, i) => -bandWidth * (i + 0.5) / atoms);
+  const conduction = Array.from({ length: atoms }, (_, i) => E_G + bandWidth * (i + 0.5) / atoms);
+  return <>
+    <Range label="Nombre d’àtoms" value={atoms} min={2} max={40} step={1} onChange={setAtoms} formatValue={v => `${v}`} />
+    <Plot xDomain={[0, 1]} yDomain={[-0.85, 2]} xLabel={`${atoms} nivells per banda · amplada esquemàtica`} yLabel="Energia (eV)" xTicks={[]} yTicks={[0, E_G]} grid={false}>
+      {({ x, y, width, height }) => <>
+        <rect x={x(0.19)} y={y(0)} width={x(0.79) - x(0.19)} height={y(-bandWidth) - y(0)} fill={C.valence} opacity={0.12} />
+        <rect x={x(0.19)} y={y(E_G + bandWidth)} width={x(0.79) - x(0.19)} height={y(E_G) - y(E_G + bandWidth)} fill={C.conduction} opacity={0.14} />
+        {valence.map((energy, i) => <line key={`v${i}`} x1={x(0.27)} x2={x(0.72)} y1={y(energy)} y2={y(energy)} stroke={C.valence} strokeWidth={2.2} />)}
+        {conduction.map((energy, i) => <line key={`c${i}`} x1={x(0.27)} x2={x(0.72)} y1={y(energy)} y2={y(energy)} stroke={C.conduction} strokeWidth={2.2} strokeDasharray="3 2" />)}
+        <text x={x(0.49)} y={y(-bandWidth * 0.45)} textAnchor="middle" fill={C.valence} className="plot-annotation">VALÈNCIA · plena</text>
+        <text x={x(0.49)} y={y(E_G + bandWidth * 0.55)} textAnchor="middle" fill={C.conduction} className="plot-annotation">CONDUCCIÓ · buida</text>
+        <line x1={x(0.84)} x2={x(0.84)} y1={y(E_G)} y2={y(0)} stroke={C.ink} />
+        <text x={x(0.87)} y={y(0.56)} className="plot-annotation">E<tspan baselineShift="sub">g</tspan> = 1,12 eV</text>
+        <text x={width + 35} y={height + 35} className="plot-annotation">Les línies són nivells discrets</text>
+      </>}
+    </Plot>
+    <p className="plot-caption">En un cristall, cada àtom aporta nivells molt pròxims. En augmentar-ne el nombre, les línies s’espesseixen fins a formar una banda. Amplada esquemàtica fixa.</p>
   </>;
 }
 
@@ -81,6 +103,9 @@ function EffectiveMass() {
 
 function BandAndDos() {
   const energies = sample(80, 0, 1);
+  const [selectedEnergy, setSelectedEnergy] = useState(1.2);
+  const conductionDos = selectedEnergy >= E_G ? Math.sqrt((selectedEnergy - E_G) / 0.65) : 0;
+  const valenceDos = selectedEnergy <= 0 ? 1.12 * Math.sqrt(-selectedEnergy / 0.65) : 0;
   return <>
     <div className="plot-pair"><Plot xDomain={[0, 1]} yDomain={[-0.45, 1.67]} xLabel="Esquema de bandes" yLabel="Energia (eV)" xTicks={[]} yTicks={[0, E_G]} grid={false}>
       {({ x, y }) => <>
@@ -92,15 +117,22 @@ function BandAndDos() {
         <text x={x(0.5)} y={y(0.56)} textAnchor="middle" className="plot-annotation">Gap prohibit · 1,12 eV</text>
       </>}
     </Plot>
-    <Plot xDomain={[0, 1.25]} yDomain={[-0.72, 1.82]} xLabel="Densitat d’estats (relativa)" yLabel="Energia E (eV)" xTicks={[0, 0.5, 1]} yTicks={[0, E_G]}>
-      {({ x, y }) => <>
+    <div>
+    <Range label="Energia seleccionada E" value={selectedEnergy} min={-0.65} max={1.77} step={0.01} onChange={setSelectedEnergy} formatValue={v => `${format(v, 2)} eV`} />
+    <Plot xDomain={[0, 1.25]} yDomain={[-0.72, 1.82]} xLabel="Densitat d’estats N(E) · relativa" yLabel="Energia E (eV)" xTicks={[0, 0.5, 1]} yTicks={[0, E_G]}>
+      {({ x, y, width }) => <>
         <rect x={x(0)} y={y(E_G)} width={x(1.25) - x(0)} height={y(0) - y(E_G)} fill={C.gap} />
         <LinePath data={energies.map(z => ({ x: Math.sqrt(z), y: E_G + 0.65 * z }))} x={d => x(d.x)} y={d => y(d.y)} stroke={C.conduction} strokeWidth={3} />
         <LinePath data={energies.map(z => ({ x: 1.12 * Math.sqrt(z), y: -0.65 * z }))} x={d => x(d.x)} y={d => y(d.y)} stroke={C.valence} strokeWidth={3} />
-        <text x={x(0.72)} y={y(1.58)} fill={C.conduction} className="plot-annotation">gC(E)</text>
-        <text x={x(0.72)} y={y(-0.54)} fill={C.valence} className="plot-annotation">gV(E)</text>
+        <line x1={x(0)} x2={x(1.25)} y1={y(selectedEnergy)} y2={y(selectedEnergy)} stroke={C.ink} strokeDasharray="4 4" opacity={0.7} />
+        {conductionDos > 0 && <circle cx={x(conductionDos)} cy={y(selectedEnergy)} r={5} fill={C.conduction} stroke="white" strokeWidth={2} />}
+        {valenceDos > 0 && <circle cx={x(valenceDos)} cy={y(selectedEnergy)} r={5} fill={C.valence} stroke="white" strokeWidth={2} />}
+        <text x={x(0.72)} y={y(1.58)} fill={C.conduction} className="plot-annotation">N<tspan baselineShift="sub">c</tspan>(E)</text>
+        <text x={x(0.72)} y={y(-0.54)} fill={C.valence} className="plot-annotation">N<tspan baselineShift="sub">v</tspan>(E)</text>
       </>}
-    </Plot></div>
+    </Plot>
+    </div></div>
+    <div className="metric"><span>N<sub>v</sub>(E) · valència</span><strong>{format(valenceDos, 2)}</strong><span>N<sub>c</sub>(E) · conducció</span><strong>{format(conductionDos, 2)}</strong><span>Valors relatius; dins del gap, tots dos són 0.</span></div>
   </>;
 }
 
@@ -141,8 +173,16 @@ function TransportAndDiode() {
   const voltage = sample(160, -1, 0.85);
   const forwardVoltage = sample(120, 0.01, 0.85);
   const diode = voltage.map(v => ({ x: v, y: diodeCurrent(v, temperature, current) }));
-  const diodeForward = forwardVoltage.map(v => ({ x: v, y: Math.max(current * 0.5, diodeCurrent(v, temperature, current)) }));
   const thermalVoltage = K_B_EV * temperature;
+  const diodeForward = forwardVoltage.map(v => ({ x: v, current: diodeCurrent(v, temperature, current) }));
+  const logMinimum = Math.floor(Math.log10(current * 0.1));
+  const logMaximum = Math.ceil(Math.log10(Math.max(...diodeForward.map(d => d.current)) * 1.15));
+  const logTickStep = Math.max(1, Math.ceil((logMaximum - logMinimum) / 5));
+  const logTicks = Array.from({ length: Math.floor((logMaximum - logMinimum) / logTickStep) + 1 }, (_, i) => Math.ceil(logMinimum / logTickStep) * logTickStep + i * logTickStep).filter(tick => tick <= logMaximum);
+  const logCurrent = diodeForward.map(d => ({ x: d.x, y: Math.log10(Math.max(d.current, current * 0.1)) }));
+  const linearized = diodeForward.map(d => ({ x: d.x, y: Math.log1p(d.current / current) }));
+  const linearizedMaximum = Math.ceil(Math.max(...linearized.map(d => d.y)) / 5) * 5;
+  const linearizedTicks = Array.from({ length: linearizedMaximum / 10 + 1 }, (_, i) => i * 10);
   return <>
     <Card tag="SILICI TIPUS N" title="Règims de conducció · Shockley">
       <Range label="Dopatge donador Nᴅ" value={logDonors} min={14} max={18} step={0.1} onChange={setLogDonors} formatValue={() => `${donors.toExponential(1)} cm⁻³`} />
@@ -163,10 +203,14 @@ function TransportAndDiode() {
         <Plot xDomain={[-1, 0.85]} yDomain={[-current * 1.2, Math.max(0.02, Math.min(0.12, diodeCurrent(0.68, temperature, current) * 1.15))]} xLabel="Tensió V (V)" yLabel="Corrent I (A)" xTicks={[-1, -0.5, 0, 0.4, 0.8]}>
           {({ x, y }) => <LinePath data={diode} x={d => x(d.x)} y={d => y(d.y)} stroke={C.ink} strokeWidth={2.5} />}
         </Plot>
-        <Plot xDomain={[0, 0.85]} yDomain={[current * 0.5, Math.max(current * 2, diodeCurrent(0.85, temperature, current) * 1.1)]} xLabel="Tensió directa V (V)" yLabel="|I| (A) · log" xTicks={[0, 0.2, 0.4, 0.6, 0.8]} yTicks={[]} yFormat={v => v.toExponential(0)}>
-          {({ x, y }) => <LinePath data={diodeForward} x={d => x(d.x)} y={d => y(d.y)} stroke={C.conduction} strokeWidth={2.5} />}
+        <Plot xDomain={[0, 0.85]} yDomain={[logMinimum, logMaximum]} xLabel="Tensió directa V (V)" yLabel="Corrent |I| (A) · escala log₁₀" xTicks={[0, 0.2, 0.4, 0.6, 0.8]} yTicks={logTicks} yFormat={v => `10${format(v, 0)}`}>
+          {({ x, y }) => <LinePath data={logCurrent} x={d => x(d.x)} y={d => y(d.y)} stroke={C.conduction} strokeWidth={2.5} />}
         </Plot>
       </div>
+      <Plot xDomain={[0, 0.85]} yDomain={[0, linearizedMaximum]} xLabel="Tensió directa V (V)" yLabel="ln(1 + I/I₀)" xTicks={[0, 0.2, 0.4, 0.6, 0.8]} yTicks={linearizedTicks}>
+        {({ x, y }) => <LinePath data={linearized} x={d => x(d.x)} y={d => y(d.y)} stroke={C.valence} strokeWidth={2.5} />}
+      </Plot>
+      <p className="plot-caption">En escala semilogarítmica, el corrent directe s’aproxima a una recta. La transformació ln(1 + I/I₀) = V/(kT/q) és una recta exacta en aquest model; la seva pendent és inversament proporcional a la temperatura.</p>
       <div className="metric"><span>Voltatge tèrmic kT/q</span><strong>{(thermalVoltage * 1000).toFixed(1)} mV</strong><span>I = I₀ [exp(V/Vₜ) − 1]</span></div>
     </Card>
   </>;
@@ -177,8 +221,8 @@ export default function App() {
     <nav className="section-nav" aria-label="Seccions"><a href="#bandes">Estructura electrònica</a><a href="#portadors">Portadors</a><a href="#transport">Transport</a></nav>
     <main id="top">
       <section className="chapter" id="bandes"><div className="chapter-head"><div><div className="eyebrow">01 / ESTRUCTURA ELECTRÒNICA</div><h2>De l’àtom al cristall</h2></div><p>Quan els àtoms s’apropen, els nivells es divideixen. En un cristall, molts nivells pròxims formen bandes.</p></div>
-        <div className="grid two"><Card tag="MODEL QUALITATIU · SILICI" title="Solapament, enllaç i bandes"><OrbitalAndBands /></Card><Card tag="MASSA EFECTIVA" title="Dispersió d’energia E(k)"><EffectiveMass /></Card></div>
-        <div className="grid single lower-grid"><Card tag="SILICI · 300 K" title="Bandes i densitat d’estats"><BandAndDos /></Card></div>
+        <div className="grid two"><Card tag="MODEL QUALITATIU · SILICI" title="Potencial i orbitals híbrids"><PotentialAndOrbitals /></Card><Card tag="MOLTS ÀTOMS · NIVELLS DISCRETS" title="Formació de bandes"><BandFormation /></Card></div>
+        <div className="grid two lower-grid"><Card tag="MASSA EFECTIVA" title="Dispersió d’energia E(k)"><EffectiveMass /></Card><Card tag="SILICI · 300 K" title="Bandes i densitat d’estats"><BandAndDos /></Card></div>
       </section>
       <section className="chapter" id="portadors"><div className="chapter-head"><div><div className="eyebrow">02 / ESTADÍSTICA DE PORTADORS</div><h2>Portadors en equilibri</h2></div><p>La temperatura genera parelles electró-forat i modifica la concentració intrínseca.</p></div><div className="grid single"><Card tag="SEMICONDUCTOR INTRÍNSEC" title="Generació tèrmica de parelles"><IntrinsicCarriers /></Card></div></section>
       <section className="chapter" id="transport"><div className="chapter-head"><div><div className="eyebrow">03 / TEMPERATURA I TRANSPORT</div><h2>De la concentració al corrent</h2></div><p>Explora els règims tèrmics d’un semiconductor dopat i la resposta d’un díode ideal.</p></div><div className="grid two"><TransportAndDiode /></div></section>
