@@ -3,7 +3,7 @@ import { LinePath } from '@visx/shape';
 import katex from 'katex';
 import 'katex/dist/katex.min.css';
 import { Plot, Lines } from './Charts';
-import { COLORS as C, E_G, K_B_EV, carrierDensities, diodeCurrent, format, intrinsicDensity, sample } from './physics';
+import { COLORS as C, E_G, K_B_EV, NC_300, NV_300, carrierDensities, diodeCurrent, format, intrinsicDensity, sample } from './physics';
 
 function Range({ label, value, min, max, step, onChange, formatValue }: { label: string; value: number; min: number; max: number; step: number; onChange: (value: number) => void; formatValue: (value: number) => string }) {
   return <label className="range-control"><span>{label}</span><strong>{formatValue(value)}</strong><input type="range" min={min} max={max} step={step} value={value} onChange={event => onChange(Number(event.target.value))} /></label>;
@@ -92,22 +92,36 @@ function BandFormation() {
 function EffectiveMass() {
   const [electronMass, setElectronMass] = useState(1);
   const [holeMass, setHoleMass] = useState(0.7);
+  const [initialK, setInitialK] = useState(-0.4);
+  const [force, setForce] = useState(0.3);
+  const [time, setTime] = useState(1);
+  const currentK = Math.max(-1, Math.min(1, initialK + force * time));
+  const conductionEnergy = (value: number) => E_G + value ** 2 / (2 * electronMass);
+  const groupVelocity = currentK / electronMass;
   const k = sample(151, -1, 1);
   return <>
-    <div className="controls two-controls">
+    <div className="controls three-controls">
       <Range label="Massa electrònica" value={electronMass} min={0.3} max={2.5} step={0.05} onChange={setElectronMass} formatValue={v => `${format(v)} m₀`} />
       <Range label="Massa de forat" value={holeMass} min={0.3} max={2.5} step={0.05} onChange={setHoleMass} formatValue={v => `${format(v)} m₀`} />
+      <Range label="Vector d’ona inicial k₀" value={initialK} min={-0.8} max={0.8} step={0.05} onChange={setInitialK} formatValue={v => `${format(v)} (relatiu)`} />
+      <Range label="Força aplicada F" value={force} min={-0.6} max={0.6} step={0.05} onChange={setForce} formatValue={v => `${format(v)} (relativa)`} />
+      <Range label="Temps t" value={time} min={0} max={2} step={0.05} onChange={setTime} formatValue={v => `${format(v)} (relatiu)`} />
     </div>
     <Plot xDomain={[-1, 1]} yDomain={[-0.8, 2.2]} xLabel="Vector d’ona k (esquema)" yLabel="Energia E (eV)" xTicks={[-1, 0, 1]} yTicks={[0, E_G, 2]}>
       {({ x, y, width }) => <>
         <rect x={x(-1)} y={y(E_G)} width={width} height={y(0) - y(E_G)} fill={C.gap} />
         <LinePath data={k.map(value => ({ x: value, y: E_G + value ** 2 / (2 * electronMass) }))} x={d => x(d.x)} y={d => y(d.y)} stroke={C.conduction} strokeWidth={3} />
         <LinePath data={k.map(value => ({ x: value, y: -(value ** 2) / (2 * holeMass) }))} x={d => x(d.x)} y={d => y(d.y)} stroke={C.valence} strokeWidth={3} />
+        <LinePath data={[{ x: currentK - 0.18, y: conductionEnergy(currentK - 0.18) }, { x: currentK + 0.18, y: conductionEnergy(currentK + 0.18) }]} x={d => x(d.x)} y={d => y(d.y)} stroke={C.ink} strokeWidth={1.5} strokeDasharray="4 3" />
+        <circle cx={x(currentK)} cy={y(conductionEnergy(currentK))} r={5} fill={C.ink} stroke="white" strokeWidth={2} />
         <text x={x(0.53)} y={y(1.68)} fill={C.conduction} className="plot-annotation">Conducció</text>
         <text x={x(0.53)} y={y(-0.48)} fill={C.valence} className="plot-annotation">València</text>
         <text x={x(-0.9)} y={y(-0.68)} className="plot-annotation">Paràbola més ampla → massa més gran</text>
       </>}
     </Plot>
+    <Equation math="\hbar\frac{dk}{dt}=F,\qquad v_g=\frac{1}{\hbar}\frac{dE}{dk}" />
+    <p className="plot-caption">El punt i la tangent mostren l’estat actual. Els controls de k, F i t són normalitzats, amb ℏ = 1 en l’actualització k(t) = k₀ + Ft.</p>
+    <div className="metric"><span>k(t) · model normalitzat</span><strong>{format(currentK, 2)}</strong><span>Velocitat de grup v<sub>g</sub> · relativa</span><strong>{format(groupVelocity, 2)}</strong></div>
   </>;
 }
 
@@ -164,13 +178,57 @@ function IntrinsicCarriers() {
       </>}
     </Plot>
     <div className="metric"><span>Concentració intrínseca</span><strong>{intrinsicDensity(temperature).toExponential(2)} cm⁻³</strong><span>En material intrínsec: n = p = nᵢ</span></div>
+    <Equation math="n=p=n_i,\qquad n_i^2=N_CN_Ve^{-E_g/(k_BT)}" />
   </>;
 }
 
-function TransportAndDiode() {
-  const [logDonors, setLogDonors] = useState(16);
+function DopedStatistics() {
+  const [dopant, setDopant] = useState<'donor' | 'acceptor'>('donor');
+  const [logDoping, setLogDoping] = useState(16);
   const [temperature, setTemperature] = useState(300);
-  const [logSaturation, setLogSaturation] = useState(-12);
+  const doping = 10 ** logDoping;
+  const ni = intrinsicDensity(temperature);
+  const majority = 0.5 * (doping + Math.sqrt(doping ** 2 + 4 * ni ** 2));
+  const electrons = dopant === 'donor' ? majority : ni ** 2 / majority;
+  const holes = dopant === 'donor' ? ni ** 2 / majority : majority;
+  const intrinsicLevel = E_G / 2 + K_B_EV * temperature / 2 * Math.log(NV_300 / NC_300);
+  const fermiLevel = intrinsicLevel + K_B_EV * temperature * Math.log(electrons / ni);
+  const occupation = sample(151, -0.25, 1.4).map(energy => ({ x: 1 / (1 + Math.exp(Math.max(-40, Math.min(40, (energy - fermiLevel) / (K_B_EV * temperature))))), y: energy }));
+  return <>
+    <div className="dopant-switch" role="group" aria-label="Tipus de dopatge">
+      <button type="button" aria-pressed={dopant === 'donor'} onClick={() => setDopant('donor')}>Donador · tipus n</button>
+      <button type="button" aria-pressed={dopant === 'acceptor'} onClick={() => setDopant('acceptor')}>Acceptador · tipus p</button>
+    </div>
+    <div className="controls two-controls">
+      <Range label="Concentració de dopants" value={logDoping} min={14} max={19} step={0.1} onChange={setLogDoping} formatValue={() => `${doping.toExponential(1)} cm⁻³`} />
+      <Range label="Temperatura" value={temperature} min={200} max={700} step={10} onChange={setTemperature} formatValue={v => `${v} K`} />
+    </div>
+    <div className="plot-pair"><Plot xDomain={[0, 1]} yDomain={[-0.25, 1.4]} xLabel="Posició esquemàtica" yLabel="Energia (eV)" xTicks={[]} yTicks={[0, E_G]} grid={false}>
+      {({ x, y, width }) => <>
+        <rect x={x(0)} y={y(E_G)} width={width} height={y(0) - y(E_G)} fill={C.gap} />
+        <line x1={x(0.12)} x2={x(0.88)} y1={y(E_G)} y2={y(E_G)} stroke={C.conduction} strokeWidth={3} />
+        <line x1={x(0.12)} x2={x(0.88)} y1={y(0)} y2={y(0)} stroke={C.valence} strokeWidth={3} />
+        <line x1={x(0.12)} x2={x(0.88)} y1={y(fermiLevel)} y2={y(fermiLevel)} stroke={C.ink} strokeWidth={2.5} strokeDasharray="6 4" />
+        <text x={x(0.9)} y={y(E_G) + 4} className="plot-annotation" fill={C.conduction}>E<tspan baselineShift="sub">C</tspan></text>
+        <text x={x(0.9)} y={y(0) + 4} className="plot-annotation" fill={C.valence}>E<tspan baselineShift="sub">V</tspan></text>
+        <text x={x(0.12)} y={y(fermiLevel) - 8} className="plot-annotation">E<tspan baselineShift="sub">F</tspan></text>
+      </>}
+    </Plot>
+    <Plot xDomain={[0, 1]} yDomain={[-0.25, 1.4]} xLabel="Ocupació f(E)" yLabel="Energia (eV)" xTicks={[0, 0.5, 1]} yTicks={[0, E_G]}>
+      {({ x, y }) => <>
+        <LinePath data={occupation} x={d => x(d.x)} y={d => y(d.y)} stroke={C.ink} strokeWidth={3} />
+        <line x1={x(0)} x2={x(1)} y1={y(fermiLevel)} y2={y(fermiLevel)} stroke={C.muted} strokeDasharray="4 4" />
+        <text x={x(0.65)} y={y(fermiLevel) - 8} className="plot-annotation">E<tspan baselineShift="sub">F</tspan></text>
+      </>}
+    </Plot></div>
+    <div className="metric"><span>Electrons n</span><strong>{electrons.toExponential(2)} cm⁻³</strong><span>Forats p</span><strong>{holes.toExponential(2)} cm⁻³</strong><span>nᵢ</span><strong>{ni.toExponential(2)} cm⁻³</strong><span>Ionització completa · aproximació no degenerada</span></div>
+    <Equation math="n+N_A^-=p+N_D^+,\qquad np=n_i^2" />
+    <Equation math="f(E)=\frac{1}{1+e^{(E-E_F)/(k_BT)}}" />
+  </>;
+}
+
+function ShockleyRegimes() {
+  const [logDonors, setLogDonors] = useState(16);
   const donors = 10 ** logDonors;
   const temperatures = sample(140, 45, 900);
   const transport = temperatures.map(t => ({ t, ...carrierDensities(t, donors) }));
@@ -180,6 +238,101 @@ function TransportAndDiode() {
     { data: transport.map(d => ({ x: d.t, y: Math.log10(Math.max(d.holes, 1)) })), color: C.hole },
     { data: transport.map(d => ({ x: d.t, y: Math.log10(Math.max(d.intrinsic, 1)) })), color: C.teal, dashed: true },
   ];
+  return <Card tag="TIPUS N · MODEL ESQUEMÀTIC" title="Règims tèrmics i diagrama de Shockley">
+    <Range label="Concentració donadora Nᴅ" value={logDonors} min={14} max={18} step={0.1} onChange={setLogDonors} formatValue={() => `${donors.toExponential(1)} cm⁻³`} />
+    <Plot xDomain={[1, 24]} yDomain={[Math.min(...invT.map(d => d.y)) - 1, Math.max(...invT.map(d => d.y)) + 1]} xLabel="1000/T (K⁻¹)" yLabel="ln σ (S/cm)" xTicks={[2, 5, 10, 20]}>
+      {({ x, y }) => <LinePath data={invT} x={d => x(d.x)} y={d => y(d.y)} stroke={C.ink} strokeWidth={2.5} />}
+    </Plot>
+    <Plot xDomain={[40, 900]} yDomain={[0, 20]} xLabel="Temperatura (K)" yLabel="Concentració (cm⁻³, escala log)" xTicks={[100, 300, 500, 700, 900]} yTicks={[0, 5, 10, 15, 20]} yFormat={v => `10${format(v, 0)}`}>
+      {({ x, y }) => <Lines series={carrierSeries} x={x} y={y} />}
+    </Plot>
+    <p className="insight">A baixa temperatura els dopants es congelen; a temperatura intermèdia dominen els donadors; a alta temperatura domina la generació intrínseca.</p>
+    <Equation math="\sigma=q(n\mu_n+p\mu_p)" />
+  </Card>;
+}
+
+function TransportEquilibrium() {
+  const [field, setField] = useState(0.4);
+  const [gradient, setGradient] = useState(12);
+  const [temperature, setTemperature] = useState(300);
+  const thermalVoltage = K_B_EV * temperature;
+  const points = sample(121, -1, 1);
+  const density = points.map(position => ({ x: position, y: 0.55 + gradient * position / 100 }));
+  const conductionBand = points.map(position => ({ x: position, y: E_G + field * position }));
+  const valenceBand = points.map(position => ({ x: position, y: field * position }));
+  const diffusionPart = thermalVoltage * (gradient / 100) / 0.55;
+  const electronCurrent = field + diffusionPart;
+  const holeCurrent = field - diffusionPart;
+  const direction = (value: number) => value > 0.03 ? '→' : value < -0.03 ? '←' : '0';
+  return <>
+    <div className="controls three-controls">
+      <Range label="Camp elèctric ξ (relatiu)" value={field} min={-1} max={1} step={0.05} onChange={setField} formatValue={v => `${format(v, 2)}`} />
+      <Range label="Gradient de concentració (relatiu)" value={gradient} min={-20} max={20} step={1} onChange={setGradient} formatValue={v => `${format(v, 0)}`} />
+      <Range label="Temperatura" value={temperature} min={250} max={500} step={10} onChange={setTemperature} formatValue={v => `${v} K`} />
+    </div>
+    <div className="plot-pair">
+      <Plot xDomain={[-1, 1]} yDomain={[-1.2, 2.3]} xLabel="Posició x (relativa)" yLabel="Energia de banda (eV)" xTicks={[-1, 0, 1]} yTicks={[-1, 0, E_G, 2]}>
+        {({ x, y }) => <>
+          <LinePath data={conductionBand} x={d => x(d.x)} y={d => y(d.y)} stroke={C.conduction} strokeWidth={3} />
+          <LinePath data={valenceBand} x={d => x(d.x)} y={d => y(d.y)} stroke={C.valence} strokeWidth={3} />
+          <text x={x(0.82)} y={y(E_G + field * 0.82) - 8} className="plot-annotation" fill={C.conduction}>E<tspan baselineShift="sub">C</tspan></text>
+          <text x={x(0.82)} y={y(field * 0.82) + 15} className="plot-annotation" fill={C.valence}>E<tspan baselineShift="sub">V</tspan></text>
+        </>}
+      </Plot>
+      <Plot xDomain={[-1, 1]} yDomain={[0, 1]} xLabel="Posició x (relativa)" yLabel="Concentració normalitzada" xTicks={[-1, 0, 1]} yTicks={[0, 0.5, 1]}>
+        {({ x, y }) => <LinePath data={density} x={d => x(d.x)} y={d => y(d.y)} stroke={C.electron} strokeWidth={3} />}
+      </Plot>
+    </div>
+    <div className="metric"><span>Corrent electrònic J<sub>n</sub></span><strong>{direction(electronCurrent)} {format(Math.abs(electronCurrent), 2)} · relatiu</strong><span>Corrent de forats J<sub>p</sub></span><strong>{direction(holeCurrent)} {format(Math.abs(holeCurrent), 2)} · relatiu</strong></div>
+    <p className="plot-caption">El camp inclina les bandes; el gradient produeix difusió. Canvia el signe dels controls per veure com s’inverteixen les contribucions al corrent.</p>
+    <Equation math="\xi=\frac{1}{q}\frac{dE_C}{dx},\qquad J_n=q n\mu_n\xi+qD_n\frac{dn}{dx},\qquad J_p=q p\mu_p\xi-qD_p\frac{dp}{dx}" />
+    <Equation math="\frac{D_n}{\mu_n}=\frac{D_p}{\mu_p}=\frac{k_BT}{q}" />
+  </>;
+}
+
+function MinorityCarriers() {
+  const [logDonors, setLogDonors] = useState(16);
+  const [logInjection, setLogInjection] = useState(13);
+  const [diffusion, setDiffusion] = useState(10);
+  const [lifetime, setLifetime] = useState(2);
+  const [elapsed, setElapsed] = useState(1);
+  const donors = 10 ** logDonors;
+  const excessAtBoundary = 10 ** logInjection;
+  const equilibriumMinority = intrinsicDensity(300) ** 2 / donors;
+  const diffusionLength = 10 * Math.sqrt(diffusion * lifetime);
+  const lowInjection = excessAtBoundary / donors < 0.1;
+  const distanceProfile = sample(120, 0, 5 * diffusionLength).map(position => ({ x: position, y: Math.exp(-position / diffusionLength) }));
+  const timeProfile = sample(100, 0, 5).map(timeOverLifetime => ({ x: timeOverLifetime, y: Math.exp(-timeOverLifetime) }));
+  return <>
+    <div className="controls three-controls">
+      <Range label="Dopatge donador Nᴅ" value={logDonors} min={14} max={18} step={0.1} onChange={setLogDonors} formatValue={() => `${donors.toExponential(1)} cm⁻³`} />
+      <Range label="Excés injectat Δp(0)" value={logInjection} min={10} max={18} step={0.1} onChange={setLogInjection} formatValue={() => `${excessAtBoundary.toExponential(1)} cm⁻³`} />
+      <Range label="Coeficient de difusió Dₚ" value={diffusion} min={1} max={35} step={0.5} onChange={setDiffusion} formatValue={v => `${format(v, 1)} cm²/s`} />
+      <Range label="Temps de vida τₚ" value={lifetime} min={0.1} max={10} step={0.1} onChange={setLifetime} formatValue={v => `${format(v, 1)} μs`} />
+      <Range label="Temps transcorregut t/τₚ" value={elapsed} min={0} max={5} step={0.1} onChange={setElapsed} formatValue={v => `${format(v, 1)} τₚ`} />
+    </div>
+    <div className="plot-pair">
+      <Plot xDomain={[0, 5 * diffusionLength]} yDomain={[0, 1.05]} xLabel="Distància des del contacte (μm)" yLabel="Excés de forats Δp/Δp(0)" xTicks={[0, diffusionLength, 3 * diffusionLength, 5 * diffusionLength]} xFormat={v => format(v, 0)} yTicks={[0, 0.5, 1]}>
+        {({ x, y }) => <LinePath data={distanceProfile} x={d => x(d.x)} y={d => y(d.y)} stroke={C.hole} strokeWidth={3} />}
+      </Plot>
+      <Plot xDomain={[0, 5]} yDomain={[0, 1.05]} xLabel="Temps després d’apagar la font (t/τₚ)" yLabel="Excés local Δp/Δp(0)" xTicks={[0, 1, 2, 3, 4, 5]} yTicks={[0, 0.5, 1]}>
+        {({ x, y }) => <>
+          <LinePath data={timeProfile} x={d => x(d.x)} y={d => y(d.y)} stroke={C.conduction} strokeWidth={3} />
+          <circle cx={x(elapsed)} cy={y(Math.exp(-elapsed))} r={5} fill={C.ink} stroke="white" strokeWidth={2} />
+        </>}
+      </Plot>
+    </div>
+    <div className="metric"><span>Longitud de difusió Lₚ</span><strong>{format(diffusionLength, 1)} μm</strong><span>Forats minoritaris d’equilibri p₀</span><strong>{equilibriumMinority.toExponential(2)} cm⁻³</strong><span>Règim d’injecció</span><strong>{lowInjection ? 'Baix nivell' : 'Alt nivell'}</strong></div>
+    <p className="plot-caption">La primera corba és el perfil estacionari amb Δp(0) fix al contacte. La segona és el decaïment local sense flux de difusió després d’apagar la font. Baix nivell: Δp ≪ Nᴅ; en quasineutralitat, Δn ≈ Δp.</p>
+    <Equation math="\frac{\partial\Delta p}{\partial t}=D_p\frac{\partial^2\Delta p}{\partial x^2}-\frac{\Delta p}{\tau_p}+G" />
+    <Equation math="L_p=\sqrt{D_p\tau_p},\qquad \Delta p(x)=\Delta p(0)e^{-x/L_p},\qquad \Delta p(0)=\Delta p_0,\;\Delta p(\infty)=0" />
+    <Equation math="\Delta p\ll n_0\simeq N_D,\qquad \Delta n\simeq\Delta p" />
+  </>;
+}
+
+function DiodeCharacteristic() {
+  const [temperature, setTemperature] = useState(300);
+  const [logSaturation, setLogSaturation] = useState(-12);
   const current = Math.pow(10, logSaturation);
   const voltage = sample(160, -1, 0.85);
   const forwardVoltage = sample(120, 0.01, 0.85);
@@ -195,16 +348,6 @@ function TransportAndDiode() {
   const linearizedMaximum = Math.ceil(Math.max(...linearized.map(d => d.y)) / 5) * 5;
   const linearizedTicks = Array.from({ length: linearizedMaximum / 10 + 1 }, (_, i) => i * 10);
   return <>
-    <Card tag="SILICI TIPUS N" title="Règims de conducció · Shockley">
-      <Range label="Dopatge donador Nᴅ" value={logDonors} min={14} max={18} step={0.1} onChange={setLogDonors} formatValue={() => `${donors.toExponential(1)} cm⁻³`} />
-      <Plot xDomain={[1, 24]} yDomain={[Math.min(...invT.map(d => d.y)) - 1, Math.max(...invT.map(d => d.y)) + 1]} xLabel="1000/T (K⁻¹)" yLabel="ln σ (S/cm)" xTicks={[2, 5, 10, 20]}>
-        {({ x, y }) => <LinePath data={invT} x={d => x(d.x)} y={d => y(d.y)} stroke={C.ink} strokeWidth={2.5} />}
-      </Plot>
-      <Plot xDomain={[40, 900]} yDomain={[0, 20]} xLabel="Temperatura (K)" yLabel="Concentració (cm⁻³, escala log)" xTicks={[100, 300, 500, 700, 900]} yTicks={[0, 5, 10, 15, 20]} yFormat={v => `10${format(v, 0)}`}>
-        {({ x, y }) => <Lines series={carrierSeries} x={x} y={y} />}
-      </Plot>
-      <p className="insight">A baixa temperatura els dopants es congelen; a temperatura intermèdia dominen els donadors; a alta temperatura domina la generació intrínseca.</p>
-    </Card>
     <Card tag="MODEL IDEAL · n = 1" title="Característica I(V) d’un díode">
       <div className="controls two-controls">
         <Range label="Temperatura" value={temperature} min={250} max={360} step={5} onChange={setTemperature} formatValue={v => `${v} K`} />
@@ -231,14 +374,19 @@ function TransportAndDiode() {
 
 export default function App() {
   return <>
-    <nav className="section-nav" aria-label="Seccions"><a href="#bandes">Estructura electrònica</a><a href="#portadors">Portadors</a><a href="#transport">Transport</a></nav>
+    <nav className="section-nav" aria-label="Temes"><a href="#tema1">Tema 1 · Bandes</a><a href="#tema2">Tema 2 · Estadística</a><a href="#tema3">Tema 3 · Transport</a><a href="#tema4">Tema 4 · Equacions</a></nav>
     <main id="top">
-      <section className="chapter" id="bandes"><div className="chapter-head"><div><div className="eyebrow">01 / ESTRUCTURA ELECTRÒNICA</div><h2>De l’àtom al cristall</h2></div><p>Quan els àtoms s’apropen, els nivells es divideixen. En un cristall, molts nivells pròxims formen bandes.</p></div>
+      <section className="chapter" id="tema1"><div className="chapter-head"><div><div className="eyebrow">TEMA 1 · INTRODUCCIÓ ALS SEMICONDUCTORS</div><h2>De l’àtom al cristall</h2></div><p>De l’estructura de bandes i la massa efectiva al moviment semiclàssic dels electrons.</p></div>
         <div className="grid two"><Card tag="MODEL QUALITATIU · SILICI" title="Potencial i orbitals híbrids"><PotentialAndOrbitals /></Card><Card tag="MOLTS ÀTOMS · NIVELLS DISCRETS" title="Formació de bandes"><BandFormation /></Card></div>
-        <div className="grid two lower-grid"><Card tag="MASSA EFECTIVA" title="Dispersió d’energia E(k)"><EffectiveMass /></Card><Card tag="SILICI · 300 K" title="Bandes i densitat d’estats"><BandAndDos /></Card></div>
+        <div className="grid single lower-grid"><Card tag="MASSA EFECTIVA · MOVIMENT SEMICLÀSSIC" title="Dispersió E(k), velocitat de grup i força"><EffectiveMass /></Card></div>
       </section>
-      <section className="chapter" id="portadors"><div className="chapter-head"><div><div className="eyebrow">02 / ESTADÍSTICA DE PORTADORS</div><h2>Portadors en equilibri</h2></div><p>La temperatura genera parelles electró-forat i modifica la concentració intrínseca.</p></div><div className="grid single"><Card tag="SEMICONDUCTOR INTRÍNSEC" title="Generació tèrmica de parelles"><IntrinsicCarriers /></Card></div></section>
-      <section className="chapter" id="transport"><div className="chapter-head"><div><div className="eyebrow">03 / TEMPERATURA I TRANSPORT</div><h2>De la concentració al corrent</h2></div><p>Explora els règims tèrmics d’un semiconductor dopat i la resposta d’un díode ideal.</p></div><div className="grid two"><TransportAndDiode /></div></section>
+      <section className="chapter" id="tema2"><div className="chapter-head"><div><div className="eyebrow">TEMA 2 · ESTADÍSTICA DE PORTADORS</div><h2>Ocupació, dopatge i concentració</h2></div><p>Com la temperatura i les impureses determinen el nivell de Fermi i les concentracions d’electrons i forats.</p></div>
+        <div className="grid two"><Card tag="SEMICONDUCTOR INTRÍNSEC" title="Generació tèrmica de parelles"><IntrinsicCarriers /></Card><Card tag="SEMICONDUCTOR EXTRÍNSEC" title="Dopatge, neutralitat i nivell de Fermi"><DopedStatistics /></Card></div>
+        <div className="grid two lower-grid"><Card tag="DENSITAT D’ESTATS" title="N(E), Nᵥ(E) i N꜀(E)"><BandAndDos /></Card><ShockleyRegimes /></div>
+      </section>
+      <section className="chapter" id="tema3"><div className="chapter-head"><div><div className="eyebrow">TEMA 3 · TRANSPORT EN EQUILIBRI</div><h2>Deriva, difusió i camp elèctric</h2></div><p>El camp inclina les bandes; els gradients de concentració impulsen la difusió. El corrent total suma les dues contribucions.</p></div><div className="grid single"><Card tag="RELACIÓ D’EINSTEIN" title="Com competeixen deriva i difusió"><TransportEquilibrium /></Card></div></section>
+      <section className="chapter" id="tema4"><div className="chapter-head"><div><div className="eyebrow">TEMA 4 · EQUACIONS DELS SEMICONDUCTORS</div><h2>Injecció, difusió i recombinació</h2></div><p>Segueix els portadors minoritaris des del contacte, al llarg del material i durant la seva recombinació.</p></div><div className="grid single"><Card tag="PORTADORS MINORITARIS · 1D" title="Longitud de difusió i temps de vida"><MinorityCarriers /></Card></div></section>
+      <section className="chapter" id="ampliacio"><div className="chapter-head"><div><div className="eyebrow">AMPLIACIÓ · TEMA 5</div><h2>Característica d’un díode</h2></div><p>Es conserva aquí la visualització de Shockley com a avanç dels temes de juncions i díodes.</p></div><div className="grid single"><DiodeCharacteristic /></div></section>
       <footer><span>Models esquemàtics amb finalitat docent · Silici</span><a href="#top">Torna a dalt ↑</a></footer>
     </main>
   </>;
