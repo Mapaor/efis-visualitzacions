@@ -14,7 +14,7 @@ export function PotentialAndOrbitals() {
   const bondingLevel = atomicLevel - 0.16 * Math.exp(-0.75 * (distance - 1));
   const antibondingLevel = atomicLevel + 0.16 * Math.exp(-0.75 * (distance - 1));
   return <>
-    <div className="controls"><Range label="Separació entre àtoms" value={distance} min={1} max={4} step={0.05} onChange={setDistance} formatValue={v => `${format(v, 2)} unitats`} /></div>
+    <div className="controls"><Range label="Separació entre àtoms" value={distance} min={1} max={4} step={0.05} onChange={setDistance} formatValue={v => `${new Intl.NumberFormat('ca-ES', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(v)} unitats`} /></div>
     <div className="plot-stack">
       <Plot xDomain={[-3.2, 3.2]} yDomain={[-2.5, 0.35]} xLabel="Posició x · dos àtoms" yLabel="Energia potencial V(x)" xTicks={[-distance / 2, 0, distance / 2]} yTicks={[-2, -1, 0]}>
         {({ x, y }) => <>
