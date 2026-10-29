@@ -3,7 +3,7 @@ import { LinePath } from '@visx/shape';
 import { Plot } from '../Charts';
 import { Equation } from '../components/Equation';
 import { Range } from '../components/Range';
-import { COLORS as C, E_G, K_B_EV, NC_300, NV_300, carrierDensities, format, intrinsicDensity, sample } from '../physics';
+import { COLORS as C, E_G, K_B_EV, NC_300, NV_300, format, intrinsicDensity, sample } from '../physics';
 import { Card } from '../components/Card';
 
 export function BandAndDos() {
@@ -142,20 +142,55 @@ export function DopedStatistics() {
 
 export function ShockleyRegimes() {
   const [logDonors, setLogDonors] = useState(16);
+  const [logNc300, setLogNc300] = useState(Math.log10(NC_300));
+  const [logNv300, setLogNv300] = useState(Math.log10(NV_300));
+  const [temperature, setTemperature] = useState(300);
   const donors = 10 ** logDonors;
+  const nc300 = 10 ** logNc300;
+  const nv300 = 10 ** logNv300;
+  const solveState = (t: number) => {
+    const kT = K_B_EV * t;
+    const ncT = nc300 * (t / 300) ** 1.5;
+    const nvT = nv300 * (t / 300) ** 1.5;
+    const donorLevel = E_G - 0.045;
+    const atFermiLevel = (ef: number) => {
+      const n = ncT * Math.exp(Math.max(-100, Math.min(40, (ef - E_G) / kT)));
+      const p = nvT * Math.exp(Math.max(-100, Math.min(40, -ef / kT)));
+      const ionizedDonors = donors / (1 + 2 * Math.exp(Math.max(-100, Math.min(100, (ef - donorLevel) / kT))));
+      return { n, p, ionizedDonors };
+    };
+    let lowEf = -0.2;
+    let highEf = 1.32;
+    for (let i = 0; i < 80; i++) {
+      const mid = (lowEf + highEf) / 2;
+      const state = atFermiLevel(mid);
+      if (state.n - state.p - state.ionizedDonors > 0) highEf = mid;
+      else lowEf = mid;
+    }
+    const fermiLevel = (lowEf + highEf) / 2;
+    const state = atFermiLevel(fermiLevel);
+    return { ...state, fermiLevel, intrinsic: Math.sqrt(ncT * nvT) * Math.exp(-E_G / (2 * kT)), ncT, nvT };
+  };
   const temperatures = sample(140, 45, 900);
-  const transport = temperatures.map(t => ({ t, ...carrierDensities(t, donors) }));
+  const transport = temperatures.map(t => ({ t, ...solveState(t) }));
   const carrierSeries: { data: { x: number; y: number }[]; color: string; width: number; dashed?: boolean }[] = [
-    { data: transport.map(d => ({ x: 1000 / d.t, y: Math.log10(Math.max(d.electrons, 1)) })), color: C.electron, width: 2.8 },
-    { data: transport.map(d => ({ x: 1000 / d.t, y: Math.log10(Math.max(d.holes, 1)) })), color: C.hole, width: 3.4 },
+    { data: transport.map(d => ({ x: 1000 / d.t, y: Math.log10(Math.max(d.n, 1)) })), color: C.electron, width: 2.8 },
+    { data: transport.map(d => ({ x: 1000 / d.t, y: Math.log10(Math.max(d.p, 1)) })), color: C.hole, width: 3.4 },
     { data: transport.map(d => ({ x: 1000 / d.t, y: Math.log10(Math.max(d.intrinsic, 1)) })), color: C.teal, width: 2.8, dashed: true },
   ];
+  const selectedState = solveState(temperature);
   return <Card tag="DIAGRAMA D’ARRHENIUS · PORTADORS" title="Concentració de portadors en funció de 1000/T">
-    <Range label="Concentració donadora Nᴅ" value={logDonors} min={14} max={18} step={0.1} onChange={setLogDonors} formatValue={() => `${donors.toExponential(1)} cm⁻³`} />
+    <div className="controls three-controls">
+      <Range label="Concentració donadora Nᴅ" value={logDonors} min={14} max={18} step={0.1} onChange={setLogDonors} formatValue={() => `${donors.toExponential(1)} cm⁻³`} />
+      <Range label="M_C(300 K)" value={logNc300} min={18} max={21} step={0.01} onChange={setLogNc300} formatValue={() => `${nc300.toExponential(2)} cm⁻³`} />
+      <Range label="M_V(300 K)" value={logNv300} min={18} max={21} step={0.01} onChange={setLogNv300} formatValue={() => `${nv300.toExponential(2)} cm⁻³`} />
+    </div>
+    <Range label="Temperatura seleccionada" value={temperature} min={50} max={900} step={10} onChange={setTemperature} formatValue={v => `${v} K`} />
     <div className="chart-legend" aria-label="Llegenda de concentracions">
       <span><i className="legend-line" style={{ borderColor: C.electron }} />Electrons n</span>
       <span><i className="legend-line" style={{ borderColor: C.hole }} />Forats p · s’accentua a T altes</span>
       <span><i className="legend-line legend-dashed" style={{ borderColor: C.teal }} />Intrínsec n = p = nᵢ</span>
+      <span><i className="legend-line legend-dashed" style={{ borderColor: C.muted }} />T seleccionada</span>
     </div>
     <Plot xDomain={[1, 24]} yDomain={[0, 20]} xLabel="1000/T (10³ K⁻¹)" yLabel="log₁₀ concentració (cm⁻³)" xTicks={[2, 5, 10, 15, 20]} yTicks={[0, 5, 10, 15, 20]}>
       {({ x, y, height }) => <>
@@ -164,9 +199,12 @@ export function ShockleyRegimes() {
         <text x={x(1.6)} y={y(19)} textAnchor="middle" className="plot-annotation">T altes · p intrínsec</text>
         <text x={x(12)} y={y(19)} textAnchor="middle" className="plot-annotation">T baixes · n i p</text>
         {carrierSeries.map(line => <LinePath key={line.color} data={line.data} x={d => x(d.x)} y={d => y(d.y)} stroke={line.color} strokeWidth={line.width} strokeDasharray={line.dashed ? '6 4' : undefined} />)}
+        <line x1={x(1000 / temperature)} x2={x(1000 / temperature)} y1={y(0)} y2={y(20)} stroke={C.muted} strokeWidth={1.5} strokeDasharray="5 5" opacity={0.8} />
       </>}
     </Plot>
+    <div className="metric"><span>Nivell de Fermi E_F</span><strong>{selectedState.fermiLevel.toFixed(3)} eV</strong><span>Fracció ionitzada Nᴅ⁺/Nᴅ</span><strong>{(100 * selectedState.ionizedDonors / donors).toFixed(2)} %</strong><span>Nᴅ⁺</span><strong>{selectedState.ionizedDonors.toExponential(2)} cm⁻³</strong><span>M_C(T) / M_V(T)</span><strong>{selectedState.ncT.toExponential(2)} / {selectedState.nvT.toExponential(2)} cm⁻³</strong></div>
     <p className="insight">A temperatures baixes es veuen n i p en el règim de congelació dels dopants; a temperatures altes destaca p en el règim intrínsec. La posició a l’eix X augmenta cap a temperatures més baixes.</p>
-    <Equation math="n(T),\ p(T)\quad\text{en funció de}\quad 1000/T" />
+    <Equation math="M_{C,V}(T)=M_{C,V}(300)\left(\frac{T}{300}\right)^{3/2},\qquad n=p+N_D^+" />
+    <Equation math="n=M_C(T)e^{-(E_C-E_F)/(kT)},\quad p=M_V(T)e^{-(E_F-E_V)/(kT)},\quad \frac{N_D^+}{N_D}=\frac{1}{1+2e^{(E_F-E_D)/(kT)}}" />
   </Card>;
 }
