@@ -3,7 +3,7 @@ import { BandAndDos, DopedStatistics, IntrinsicCarriers, ShockleyRegimes } from 
 import { BandFormation, EffectiveMass, PotentialAndOrbitals } from './visualizations/Tema1';
 import { TransportEquilibrium } from './visualizations/Tema3';
 import { MinorityCarriers } from './visualizations/Tema4';
-import { DiodeCharacteristic } from './visualizations/Tema5';
+import { DiodeCharacteristic, SchottkyCharacteristic } from './visualizations/Tema5';
 
 export default function App() {
   return <>
@@ -12,6 +12,7 @@ export default function App() {
       <a href="#tema2">Tema 2 · Estadística</a>
       <a href="#tema3">Tema 3 · Transport</a>
       <a href="#tema4">Tema 4 · Equacions</a>
+      <a href="#tema5">Tema 5 · Díodes</a>
     </nav>
     <main id="top">
       <section className="chapter" id="tema1">
@@ -33,13 +34,13 @@ export default function App() {
           <div><div className="eyebrow">TEMA 2 · ESTADÍSTICA DE PORTADORS</div><h2>Ocupació, dopatge i concentració</h2></div>
           <p>Com la temperatura i les impureses determinen el nivell de Fermi i les concentracions d’electrons i forats.</p>
         </div>
-        <div className="grid two">
-          <Card tag="SEMICONDUCTOR INTRÍNSEC" title="Generació tèrmica de parelles"><IntrinsicCarriers /></Card>
-          <Card tag="SEMICONDUCTOR EXTRÍNSEC" title="Dopatge, neutralitat i nivell de Fermi"><DopedStatistics /></Card>
+        <div className="grid single">
+          <ShockleyRegimes />
+          <Card tag="NEUTRALITAT ELÈCTRICA · PORTADORS I DOPANTS IONITZATS" title="Diagrama de Shockley: concentracions en funció d’E_F"><DopedStatistics /></Card>
         </div>
         <div className="grid two lower-grid">
+          <Card tag="SEMICONDUCTOR INTRÍNSEC" title="Generació tèrmica de parelles"><IntrinsicCarriers /></Card>
           <Card tag="DENSITAT D’ESTATS" title="N(E), Nᵥ(E) i N꜀(E)"><BandAndDos /></Card>
-          <ShockleyRegimes />
         </div>
       </section>
 
@@ -63,12 +64,12 @@ export default function App() {
         </div>
       </section>
 
-      <section className="chapter" id="ampliacio">
+      <section className="chapter" id="tema5">
         <div className="chapter-head">
-          <div><div className="eyebrow">TEMA 5 · SEMICONDUCTORS AL BUIT</div><h2>Característica d’un díode</h2></div>
-          <p>Es conserva aquí la visualització de Shockley com a avanç dels temes de juncions i díodes.</p>
+          <div><div className="eyebrow">TEMA 5 · DÍODES</div><h2>Díodes de Shockley i Schottky</h2></div>
+          <p>Comparació del model de junció p-n amb el contacte metall-semiconductor i l’emissió termoiónica.</p>
         </div>
-        <div className="grid single"><DiodeCharacteristic /></div>
+        <div className="grid two"><DiodeCharacteristic /><SchottkyCharacteristic /></div>
       </section>
 
       <footer><span>Models esquemàtics amb finalitat docent · Silici</span><a href="#top">Torna a dalt ↑</a></footer>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { LinePath } from '@visx/shape';
-import { Lines, Plot } from '../Charts';
+import { Plot } from '../Charts';
 import { Equation } from '../components/Equation';
 import { Range } from '../components/Range';
 import { COLORS as C, E_G, K_B_EV, NC_300, NV_300, carrierDensities, format, intrinsicDensity, sample } from '../physics';
@@ -60,54 +60,83 @@ export function IntrinsicCarriers() {
       </>}
     </Plot>
     <div className="metric"><span>Concentració intrínseca</span><strong>{intrinsicDensity(temperature).toExponential(2)} cm⁻³</strong><span>En material intrínsec: n = p = nᵢ</span></div>
-    <Equation math="n=p=n_i,\qquad n_i^2=N_CN_Ve^{-E_g/(k_BT)}" />
+    <Equation math="n=p=n_i,\qquad n_i^2=M_CM_Ve^{-E_g/(kT)}" />
   </>;
 }
 
 export function DopedStatistics() {
-  const [dopant, setDopant] = useState<'donor' | 'acceptor'>('donor');
-  const [logDoping, setLogDoping] = useState(16);
+  const [logDonors, setLogDonors] = useState(16);
+  const [logAcceptors, setLogAcceptors] = useState(15);
   const [temperature, setTemperature] = useState(300);
-  const doping = 10 ** logDoping;
+  const donors = 10 ** logDonors;
+  const acceptors = 10 ** logAcceptors;
   const ni = intrinsicDensity(temperature);
-  const majority = 0.5 * (doping + Math.sqrt(doping ** 2 + 4 * ni ** 2));
-  const electrons = dopant === 'donor' ? majority : ni ** 2 / majority;
-  const holes = dopant === 'donor' ? ni ** 2 / majority : majority;
-  const intrinsicLevel = E_G / 2 + K_B_EV * temperature / 2 * Math.log(NV_300 / NC_300);
-  const fermiLevel = intrinsicLevel + K_B_EV * temperature * Math.log(electrons / ni);
-  const occupation = sample(151, -0.25, 1.4).map(energy => ({ x: 1 / (1 + Math.exp(Math.max(-40, Math.min(40, (energy - fermiLevel) / (K_B_EV * temperature))))), y: energy }));
+  const kT = K_B_EV * temperature;
+  const ncT = NC_300 * (temperature / 300) ** 1.5;
+  const nvT = NV_300 * (temperature / 300) ** 1.5;
+  const donorLevel = E_G - 0.045;
+  const acceptorLevel = 0.045;
+  const carriersAt = (ef: number) => {
+    const n = ncT * Math.exp(Math.max(-100, Math.min(40, (ef - E_G) / kT)));
+    const p = nvT * Math.exp(Math.max(-100, Math.min(40, -ef / kT)));
+    const ionizedDonors = donors / (1 + 2 * Math.exp(Math.max(-100, Math.min(100, (ef - donorLevel) / kT))));
+    const ionizedAcceptors = acceptors / (1 + 2 * Math.exp(Math.max(-100, Math.min(100, (acceptorLevel - ef) / kT))));
+    return { n, p, ionizedDonors, ionizedAcceptors };
+  };
+  let lowEf = -0.2;
+  let highEf = 1.32;
+  for (let i = 0; i < 80; i++) {
+    const mid = (lowEf + highEf) / 2;
+    const balance = carriersAt(mid);
+    if (balance.n + balance.ionizedAcceptors - balance.p - balance.ionizedDonors > 0) highEf = mid;
+    else lowEf = mid;
+  }
+  const fermiLevel = (lowEf + highEf) / 2;
+  const equilibrium = carriersAt(fermiLevel);
+  const netIonizedDoping = equilibrium.ionizedDonors - equilibrium.ionizedAcceptors;
+  const intrinsicLevel = E_G / 2 + kT / 2 * Math.log(nvT / ncT);
+  const intrinsicDominates = equilibrium.n + equilibrium.p > 2 * Math.abs(netIonizedDoping);
+  const fermiExplanation = intrinsicDominates
+    ? `Els portadors intrínsecs ja pesen tant com el dopatge net; per això E_F s’acosta al nivell intrínsec E_i ≈ ${intrinsicLevel.toFixed(2)} eV.`
+    : netIonizedDoping > 0
+      ? `Predominen els donadors ionitzats (Nᴅ⁺ − Nₐ⁻ = ${netIonizedDoping.toExponential(2)} cm⁻³). E_F puja: així augmenta n i baixa Nᴅ⁺ fins que es compensa la càrrega.`
+      : `Predominen els acceptadors ionitzats (Nₐ⁻ − Nᴅ⁺ = ${(-netIonizedDoping).toExponential(2)} cm⁻³). E_F baixa: així augmenta p i baixa Nₐ⁻ fins que es compensa la càrrega.`;
+  const fermiSweep = sample(151, -0.2, 1.32);
+  const carrierCurves = fermiSweep.map(ef => ({ x: ef, ...carriersAt(ef) }));
   return <>
-    <div className="dopant-switch" role="group" aria-label="Tipus de dopatge">
-      <button type="button" aria-pressed={dopant === 'donor'} onClick={() => setDopant('donor')}>Donador · tipus n</button>
-      <button type="button" aria-pressed={dopant === 'acceptor'} onClick={() => setDopant('acceptor')}>Acceptador · tipus p</button>
-    </div>
-    <div className="controls two-controls">
-      <Range label="Concentració de dopants" value={logDoping} min={14} max={19} step={0.1} onChange={setLogDoping} formatValue={() => `${doping.toExponential(1)} cm⁻³`} />
+    <div className="controls three-controls">
+      <Range label="Donadors Nᴅ" value={logDonors} min={12} max={19} step={0.1} onChange={setLogDonors} formatValue={() => `${donors.toExponential(1)} cm⁻³`} />
+      <Range label="Acceptadors Nₐ" value={logAcceptors} min={12} max={19} step={0.1} onChange={setLogAcceptors} formatValue={() => `${acceptors.toExponential(1)} cm⁻³`} />
       <Range label="Temperatura" value={temperature} min={200} max={700} step={10} onChange={setTemperature} formatValue={v => `${v} K`} />
     </div>
-    <div className="plot-pair">
-      <Plot xDomain={[0, 1]} yDomain={[-0.25, 1.4]} xLabel="Posició esquemàtica" yLabel="Energia (eV)" xTicks={[]} yTicks={[0, E_G]} grid={false}>
-        {({ x, y, width }) => <>
-          <rect x={x(0)} y={y(E_G)} width={width} height={y(0) - y(E_G)} fill={C.gap} />
-          <line x1={x(0.12)} x2={x(0.88)} y1={y(E_G)} y2={y(E_G)} stroke={C.conduction} strokeWidth={3} />
-          <line x1={x(0.12)} x2={x(0.88)} y1={y(0)} y2={y(0)} stroke={C.valence} strokeWidth={3} />
-          <line x1={x(0.12)} x2={x(0.88)} y1={y(fermiLevel)} y2={y(fermiLevel)} stroke={C.ink} strokeWidth={2.5} strokeDasharray="6 4" />
-          <text x={x(0.9)} y={y(E_G) + 4} className="plot-annotation" fill={C.conduction}>E<tspan baselineShift="sub">C</tspan></text>
-          <text x={x(0.9)} y={y(0) + 4} className="plot-annotation" fill={C.valence}>E<tspan baselineShift="sub">V</tspan></text>
-          <text x={x(0.12)} y={y(fermiLevel) - 8} className="plot-annotation">E<tspan baselineShift="sub">F</tspan></text>
-        </>}
-      </Plot>
-      <Plot xDomain={[0, 1]} yDomain={[-0.25, 1.4]} xLabel="Ocupació f(E)" yLabel="Energia (eV)" xTicks={[0, 0.5, 1]} yTicks={[0, E_G]}>
-        {({ x, y }) => <>
-          <LinePath data={occupation} x={d => x(d.x)} y={d => y(d.y)} stroke={C.ink} strokeWidth={3} />
-          <line x1={x(0)} x2={x(1)} y1={y(fermiLevel)} y2={y(fermiLevel)} stroke={C.muted} strokeDasharray="4 4" />
-          <text x={x(0.65)} y={y(fermiLevel) - 8} className="plot-annotation">E<tspan baselineShift="sub">F</tspan></text>
-        </>}
-      </Plot>
+    <div className="chart-legend" aria-label="Llegenda de concentracions segons el nivell de Fermi">
+      <span><i className="legend-line" style={{ borderColor: C.electron }} />Electrons n</span>
+      <span><i className="legend-line" style={{ borderColor: C.hole }} />Forats p</span>
+      <span><i className="legend-line" style={{ borderColor: C.conduction }} />Donadors ionitzats Nᴅ⁺</span>
+      <span><i className="legend-line" style={{ borderColor: C.purple }} />Acceptadors ionitzats Nₐ⁻</span>
+      <span><i className="legend-line legend-dashed" style={{ borderColor: C.muted }} />Intrínseca nᵢ</span>
+      <span><i className="legend-line legend-dashed" style={{ borderColor: C.muted }} />Nivell intrínsec Eᵢ</span>
     </div>
-    <div className="metric"><span>Electrons n</span><strong>{electrons.toExponential(2)} cm⁻³</strong><span>Forats p</span><strong>{holes.toExponential(2)} cm⁻³</strong><span>nᵢ</span><strong>{ni.toExponential(2)} cm⁻³</strong><span>Ionització completa · aproximació no degenerada</span></div>
-    <Equation math="n+N_A^-=p+N_D^+,\qquad np=n_i^2" />
-    <Equation math="f(E)=\frac{1}{1+e^{(E-E_F)/(k_BT)}}" />
+    <Plot xDomain={[-0.2, 1.32]} yDomain={[0, 20]} xLabel="Nivell de Fermi E_F (eV)" yLabel="log₁₀ concentració (cm⁻³)" xTicks={[0, E_G / 2, E_G]} yTicks={[0, 5, 10, 15, 20]}>
+        {({ x, y }) => <>
+          {[
+            { key: 'n', color: C.electron }, { key: 'p', color: C.hole },
+            { key: 'ionizedDonors', color: C.conduction }, { key: 'ionizedAcceptors', color: C.purple },
+          ].map(line => <LinePath key={line.key} data={carrierCurves.map(d => ({ x: d.x, y: Math.log10(Math.max(d[line.key as keyof typeof d] as number, 1)) }))} x={d => x(d.x)} y={d => y(d.y)} stroke={line.color} strokeWidth={2.8} />)}
+          <line x1={x(-0.2)} x2={x(1.32)} y1={y(Math.log10(Math.max(ni, 1)))} y2={y(Math.log10(Math.max(ni, 1)))} stroke={C.muted} strokeWidth={1.1} strokeDasharray="4 5" opacity={0.55} />
+          <text x={x(1.29)} y={y(Math.log10(Math.max(ni, 1))) - 7} textAnchor="end" className="plot-annotation" fill={C.muted}>nᵢ</text>
+          <line x1={x(intrinsicLevel)} x2={x(intrinsicLevel)} y1={y(0)} y2={y(20)} stroke={C.muted} strokeWidth={1.1} strokeDasharray="4 5" opacity={0.55} />
+          <text x={x(intrinsicLevel) + 5} y={y(2)} className="plot-annotation" fill={C.muted}>Eᵢ</text>
+          <line x1={x(fermiLevel)} x2={x(fermiLevel)} y1={y(0)} y2={y(20)} stroke={C.fermi} strokeWidth={2} strokeDasharray="6 3" opacity={0.9} />
+          <text x={x(fermiLevel) + 6} y={y(18)} className="plot-annotation" fill={C.fermi}>E_F neutre</text>
+        </>}
+    </Plot>
+    <div className="metric"><span>n</span><strong>{equilibrium.n.toExponential(2)} cm⁻³</strong><span>p</span><strong>{equilibrium.p.toExponential(2)} cm⁻³</strong><span>Nᴅ⁺</span><strong>{equilibrium.ionizedDonors.toExponential(2)} cm⁻³</strong><span>Nₐ⁻</span><strong>{equilibrium.ionizedAcceptors.toExponential(2)} cm⁻³</strong></div>
+    <div className="insight"><strong>Balanç a E_F = {fermiLevel.toFixed(3)} eV:</strong> n ({equilibrium.n.toExponential(2)}) + Nₐ⁻ ({equilibrium.ionizedAcceptors.toExponential(2)}) = p ({equilibrium.p.toExponential(2)}) + Nᴅ⁺ ({equilibrium.ionizedDonors.toExponential(2)}) cm⁻³. {fermiExplanation}</div>
+    <Equation math="E_F=E_{Fi}+kT\ln\!\left(\frac{n}{n_i}\right)=E_{Fi}-kT\ln\!\left(\frac{p}{n_i}\right),\qquad E_{Fi}=\frac{E_C+E_V}{2}+\frac{kT}{2}\ln\!\frac{M_V}{M_C}" />
+    <Equation math="n+N_A^-=p+N_D^+" />
+    <Equation math="n=M_Ce^{-(E_C-E_F)/(kT)},\qquad p=M_Ve^{-(E_F-E_V)/(kT)}" />
+    <Equation math="\frac{N_D^+}{N_D}=\frac{1}{1+2e^{(E_F-E_D)/(kT)}},\qquad \frac{N_A^-}{N_A}=\frac{1}{1+2e^{(E_A-E_F)/(kT)}}" />
   </>;
 }
 
@@ -116,27 +145,28 @@ export function ShockleyRegimes() {
   const donors = 10 ** logDonors;
   const temperatures = sample(140, 45, 900);
   const transport = temperatures.map(t => ({ t, ...carrierDensities(t, donors) }));
-  const invT = transport.map(d => ({ x: 1000 / d.t, y: Math.log(d.electrons * 1.602e-19 * 1350 * (d.t / 300) ** -1.5) }));
-  const carrierSeries = [
-    { data: transport.map(d => ({ x: d.t, y: Math.log10(Math.max(d.electrons, 1)) })), color: C.electron },
-    { data: transport.map(d => ({ x: d.t, y: Math.log10(Math.max(d.holes, 1)) })), color: C.hole },
-    { data: transport.map(d => ({ x: d.t, y: Math.log10(Math.max(d.intrinsic, 1)) })), color: C.teal, dashed: true },
+  const carrierSeries: { data: { x: number; y: number }[]; color: string; width: number; dashed?: boolean }[] = [
+    { data: transport.map(d => ({ x: 1000 / d.t, y: Math.log10(Math.max(d.electrons, 1)) })), color: C.electron, width: 2.8 },
+    { data: transport.map(d => ({ x: 1000 / d.t, y: Math.log10(Math.max(d.holes, 1)) })), color: C.hole, width: 3.4 },
+    { data: transport.map(d => ({ x: 1000 / d.t, y: Math.log10(Math.max(d.intrinsic, 1)) })), color: C.teal, width: 2.8, dashed: true },
   ];
-  return <Card tag="TIPUS N · MODEL ESQUEMÀTIC" title="Règims tèrmics i diagrama de Shockley">
+  return <Card tag="DIAGRAMA D’ARRHENIUS · PORTADORS" title="Concentració de portadors en funció de 1000/T">
     <Range label="Concentració donadora Nᴅ" value={logDonors} min={14} max={18} step={0.1} onChange={setLogDonors} formatValue={() => `${donors.toExponential(1)} cm⁻³`} />
-    <Plot xDomain={[1, 24]} yDomain={[Math.min(...invT.map(d => d.y)) - 1, Math.max(...invT.map(d => d.y)) + 1]} xLabel="1000/T (K⁻¹)" yLabel="ln σ (S/cm)" xTicks={[2, 5, 10, 20]}>
-      {({ x, y }) => <LinePath data={invT} x={d => x(d.x)} y={d => y(d.y)} stroke={C.ink} strokeWidth={2.5} />}
-    </Plot>
-    <p className="plot-caption">Corba fosca: conductivitat total ln σ en funció de 1000/T.</p>
     <div className="chart-legend" aria-label="Llegenda de concentracions">
       <span><i className="legend-line" style={{ borderColor: C.electron }} />Electrons n</span>
-      <span><i className="legend-line" style={{ borderColor: C.hole }} />Forats p</span>
-      <span><i className="legend-line legend-dashed" style={{ borderColor: C.teal }} />Intrínseca nᵢ</span>
+      <span><i className="legend-line" style={{ borderColor: C.hole }} />Forats p · s’accentua a T altes</span>
+      <span><i className="legend-line legend-dashed" style={{ borderColor: C.teal }} />Intrínsec n = p = nᵢ</span>
     </div>
-    <Plot xDomain={[40, 900]} yDomain={[0, 20]} xLabel="Temperatura (K)" yLabel="Concentració (cm⁻³, escala log)" xTicks={[100, 300, 500, 700, 900]} yTicks={[0, 5, 10, 15, 20]} yFormat={v => `10${format(v, 0)}`}>
-      {({ x, y }) => <Lines series={carrierSeries} x={x} y={y} />}
+    <Plot xDomain={[1, 24]} yDomain={[0, 20]} xLabel="1000/T (10³ K⁻¹)" yLabel="log₁₀ concentració (cm⁻³)" xTicks={[2, 5, 10, 15, 20]} yTicks={[0, 5, 10, 15, 20]}>
+      {({ x, y, height }) => <>
+        <rect x={x(1)} y={0} width={x(2.2) - x(1)} height={height} fill={C.hole} opacity={0.06} />
+        <rect x={x(4)} y={0} width={x(24) - x(4)} height={height} fill={C.electron} opacity={0.05} />
+        <text x={x(1.6)} y={y(19)} textAnchor="middle" className="plot-annotation">T altes · p intrínsec</text>
+        <text x={x(12)} y={y(19)} textAnchor="middle" className="plot-annotation">T baixes · n i p</text>
+        {carrierSeries.map(line => <LinePath key={line.color} data={line.data} x={d => x(d.x)} y={d => y(d.y)} stroke={line.color} strokeWidth={line.width} strokeDasharray={line.dashed ? '6 4' : undefined} />)}
+      </>}
     </Plot>
-    <p className="insight">A baixa temperatura els dopants es congelen; a temperatura intermèdia dominen els donadors; a alta temperatura domina la generació intrínseca.</p>
-    <Equation math="\sigma=q(n\mu_n+p\mu_p)" />
+    <p className="insight">A temperatures baixes es veuen n i p en el règim de congelació dels dopants; a temperatures altes destaca p en el règim intrínsec. La posició a l’eix X augmenta cap a temperatures més baixes.</p>
+    <Equation math="n(T),\ p(T)\quad\text{en funció de}\quad 1000/T" />
   </Card>;
 }

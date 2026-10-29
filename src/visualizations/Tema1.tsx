@@ -71,6 +71,23 @@ export function BandFormation() {
     </Plot>
     <p className="plot-caption">En un cristall, cada àtom aporta un nivell. En augmentar-ne el nombre, els nivells s’espesseixen fins a formar una banda. Amplada esquemàtica fixa.</p>
     <Equation math="N_{\text{àtoms}}\;\longrightarrow\;N_{\text{nivells}}\;\longrightarrow\;\text{banda}" />
+    <Plot xDomain={[1, 4]} yDomain={[-1.5, 1.5]} xLabel="Distància interatòmica d (unitats relatives)" yLabel="Energia E (escala relativa)" xTicks={[1, 2, 3, 4]} yTicks={[-1, 0, 1]}>
+      {({ x, y }) => {
+        const distances = sample(140, 1, 4);
+        const gap = (d: number) => 0.35 + 1.05 * Math.exp(-0.8 * (d - 1));
+        const conductionEdge = distances.map(d => ({ x: d, y: gap(d) / 2 }));
+        const valenceEdge = distances.map(d => ({ x: d, y: -gap(d) / 2 }));
+        return <>
+          <LinePath data={conductionEdge} x={point => x(point.x)} y={point => y(point.y)} stroke={C.conduction} strokeWidth={3} />
+          <LinePath data={valenceEdge} x={point => x(point.x)} y={point => y(point.y)} stroke={C.valence} strokeWidth={3} />
+          <text x={x(1.12)} y={y(gap(1.12) / 2) - 9} fill={C.conduction} className="plot-annotation">E<tspan baselineShift="sub">c</tspan></text>
+          <text x={x(1.12)} y={y(-gap(1.12) / 2) + 17} fill={C.valence} className="plot-annotation">E<tspan baselineShift="sub">v</tspan></text>
+          <text x={x(3.85)} y={y(1.28)} textAnchor="end" className="plot-annotation">àtoms separats</text>
+          <text x={x(1.15)} y={y(1.28)} className="plot-annotation">àtoms propers</text>
+        </>;
+      }}
+    </Plot>
+    <p className="plot-caption">Esquema qualitatiu: en apropar els àtoms, les interaccions fan que les vores de conducció E<sub>c</sub> i de valència E<sub>v</sub> se separin més. L’escala d’energia és relativa.</p>
   </>;
 }
 
