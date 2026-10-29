@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Card } from './components/Card';
 import { BandAndDos, DopedStatistics, IntrinsicCarriers, ShockleyRegimes } from './visualizations/Tema2';
 import { BandFormation, EffectiveMass, PotentialAndOrbitals } from './visualizations/Tema1';
@@ -6,6 +7,26 @@ import { MinorityCarriers } from './visualizations/Tema4';
 import { DiodeCharacteristic, SchottkyCharacteristic } from './visualizations/Tema5';
 
 export default function App() {
+  const path = window.location.pathname.replace(/\/+$/, '') || '/';
+  const standaloneArrhenius = path === '/arrhenius';
+  const standaloneShockley = path === '/shockley';
+  useEffect(() => {
+    document.title = standaloneArrhenius
+      ? 'Diagrama d’Arrhenius · Física Electrònica'
+      : standaloneShockley
+        ? 'Neutralitat de Shockley · Física Electrònica'
+        : 'Física Electrònica · Laboratori visual';
+  }, [standaloneArrhenius, standaloneShockley]);
+
+  if (standaloneArrhenius || standaloneShockley) {
+    return <main className="standalone-page">
+      <div className="standalone-header"><a href="/">← Totes les visualitzacions</a><span>Visualització ampliada · Tema 2</span></div>
+      {standaloneArrhenius
+        ? <ShockleyRegimes />
+        : <Card tag="NEUTRALITAT ELÈCTRICA · PORTADORS I DOPANTS IONITZATS" title="Diagrama de Shockley: concentracions en funció d’E_F"><DopedStatistics /></Card>}
+    </main>;
+  }
+
   return <>
     <nav className="section-nav" aria-label="Temes">
       <a href="#tema1">Tema 1 · Bandes</a>
@@ -34,6 +55,7 @@ export default function App() {
           <div><div className="eyebrow">TEMA 2 · ESTADÍSTICA DE PORTADORS</div><h2>Ocupació, dopatge i concentració</h2></div>
           <p>Com la temperatura i les impureses determinen el nivell de Fermi i les concentracions d’electrons i forats.</p>
         </div>
+        <div className="chapter-links"><a href="/arrhenius">Arrhenius en gran ↗</a><a href="/shockley">Neutralitat de Shockley en gran ↗</a></div>
         <div className="grid single">
           <ShockleyRegimes />
           <Card tag="NEUTRALITAT ELÈCTRICA · PORTADORS I DOPANTS IONITZATS" title="Diagrama de Shockley: concentracions en funció d’E_F"><DopedStatistics /></Card>
