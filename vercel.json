@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    { "source": "/arrhenius", "destination": "/" },
+    { "source": "/arrhenius/", "destination": "/" },
+    { "source": "/shockley", "destination": "/" },
+    { "source": "/shockley/", "destination": "/" }
+  ]
+}
