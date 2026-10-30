@@ -688,15 +688,16 @@ export function ThermalStatisticsPanels() {
 export function DopedStatistics() {
   const [showChargeSums, setShowChargeSums] = useState(false);
   const [hideIndividualCurves, setHideIndividualCurves] = useState(false);
-  const [logDonors, setLogDonors] = useState(16);
-  const [logAcceptors, setLogAcceptors] = useState(15);
+  // Slider position 0 is an exact zero concentration; positive values remain logarithmic.
+  const [donorSlider, setDonorSlider] = useState(180.1);
+  const [acceptorSlider, setAcceptorSlider] = useState(170.1);
   const [logNc300, setLogNc300] = useState(Math.log10(NC_300));
   const [logNv300, setLogNv300] = useState(Math.log10(NV_300));
   const [donorLevel, setDonorLevel] = useState(E_G - 0.045);
   const [acceptorLevel, setAcceptorLevel] = useState(0.045);
   const [temperature, setTemperature] = useState(300);
-  const donors = 10 ** logDonors;
-  const acceptors = 10 ** logAcceptors;
+  const donors = donorSlider === 0 ? 0 : 10 ** (-2 + (donorSlider - 0.1) / 10);
+  const acceptors = acceptorSlider === 0 ? 0 : 10 ** (-2 + (acceptorSlider - 0.1) / 10);
   const nc300 = 10 ** logNc300;
   const nv300 = 10 ** logNv300;
   const kT = K_B_EV * temperature;
@@ -723,8 +724,8 @@ export function DopedStatistics() {
   const netIonizedDoping = equilibrium.ionizedDonors - equilibrium.ionizedAcceptors;
   const intrinsicLevel = E_G / 2 + kT / 2 * Math.log(nvT / ncT);
   const intrinsicDominates = equilibrium.n + equilibrium.p > 2 * Math.abs(netIonizedDoping);
-  const donorIonization = equilibrium.ionizedDonors / donors;
-  const acceptorIonization = equilibrium.ionizedAcceptors / acceptors;
+  const donorIonization = donors > 0 ? equilibrium.ionizedDonors / donors : 0;
+  const acceptorIonization = acceptors > 0 ? equilibrium.ionizedAcceptors / acceptors : 0;
   const intrinsicOffset = fermiLevel - intrinsicLevel;
   const carrierRatio = Math.max(equilibrium.n, equilibrium.p) / Math.max(Math.min(equilibrium.n, equilibrium.p), 1);
   const fermiPositionText = Math.abs(intrinsicOffset) < 0.015
@@ -762,8 +763,8 @@ export function DopedStatistics() {
   const carrierCurves = fermiSweep.map(ef => ({ x: ef, ...carriersAt(ef) }));
   return <>
     <div className="controls two-controls">
-      <Range label="Donadors Nᴅ" value={logDonors} min={12} max={19} step={0.1} onChange={setLogDonors} formatValue={() => `${donors.toExponential(1)} cm⁻³`} />
-      <Range label="Acceptadors Nₐ" value={logAcceptors} min={12} max={19} step={0.1} onChange={setLogAcceptors} formatValue={() => `${acceptors.toExponential(1)} cm⁻³`} />
+      <Range label="Donadors Nᴅ" value={donorSlider} min={0} max={211.1} step={0.1} onChange={setDonorSlider} formatValue={() => `${donors === 0 ? '0' : donors.toExponential(1)} cm⁻³`} />
+      <Range label="Acceptadors Nₐ" value={acceptorSlider} min={0} max={211.1} step={0.1} onChange={setAcceptorSlider} formatValue={() => `${acceptors === 0 ? '0' : acceptors.toExponential(1)} cm⁻³`} />
     </div>
     <div className="controls two-controls">
       <Range label={<><i>M</i><sub>C</sub>(300 K) = n(E<sub>C</sub>)</>} value={logNc300} min={18} max={21} step={0.01} onChange={setLogNc300} formatValue={() => `${nc300.toExponential(2)} cm⁻³`} />
