@@ -222,6 +222,71 @@ export function ExtrinsicDos() {
   </Card>;
 }
 
+export function FermiTemperatureShift() {
+  const [dopantType, setDopantType] = useState<'n' | 'p'>('n');
+  const temperatureSamples = sample(180, 1, 800);
+  const dopings = [13, 14, 15, 16, 17, 18, 19].map(exponent => 10 ** exponent);
+  const colors = [C.electron, C.conduction, C.teal, C.fermi, C.hole, C.purple, C.ink];
+  const referenceDos300 = Math.sqrt(NC_300 * NV_300);
+  const fermiOffsetAt = (temperature: number, doping: number) => {
+    const kT = K_B_EV * temperature;
+    const nc = referenceDos300 * (temperature / 300) ** 1.5;
+    const nv = nc;
+    const donorLevel = E_G - 0.045;
+    const acceptorLevel = 0.045;
+    const atFermi = (fermiLevel: number) => {
+      const n = nc * Math.exp(Math.max(-700, Math.min(40, (fermiLevel - E_G) / kT)));
+      const p = nv * Math.exp(Math.max(-700, Math.min(40, -fermiLevel / kT)));
+      const donorsIonized = dopantType === 'n'
+        ? doping / (1 + 2 * Math.exp(Math.max(-700, Math.min(700, (fermiLevel - donorLevel) / kT))))
+        : 0;
+      const acceptorsIonized = dopantType === 'p'
+        ? doping / (1 + 2 * Math.exp(Math.max(-700, Math.min(700, (acceptorLevel - fermiLevel) / kT))))
+        : 0;
+      return n + acceptorsIonized - p - donorsIonized;
+    };
+    let lowFermi = -0.2;
+    let highFermi = 1.32;
+    for (let i = 0; i < 80; i++) {
+      const midFermi = (lowFermi + highFermi) / 2;
+      if (atFermi(midFermi) > 0) highFermi = midFermi;
+      else lowFermi = midFermi;
+    }
+    return (lowFermi + highFermi) / 2 - E_G / 2;
+  };
+  const curves = dopings.map((doping, index) => ({
+    doping,
+    color: colors[index],
+    data: temperatureSamples.map(temperature => ({ x: temperature, y: fermiOffsetAt(temperature, doping) })),
+  }));
+  const donorOffset = E_G / 2 - 0.045;
+
+  return <Card tag="NIVELL DE FERMI · DOPATGE" title="Desplaçament E_F − E_i en funció de la temperatura">
+    <div className="dopant-switch" role="group" aria-label="Tipus de dopatge">
+      <button type="button" aria-pressed={dopantType === 'n'} onClick={() => setDopantType('n')}>Tipus n</button>
+      <button type="button" aria-pressed={dopantType === 'p'} onClick={() => setDopantType('p')}>Tipus p</button>
+    </div>
+    <div className="chart-legend" aria-label="Concentracions de dopatge">
+      {curves.map(curve => <span key={curve.doping}><i className="legend-line" style={{ borderColor: curve.color }} />{curve.doping.toExponential(0).replace('e+', '·10^')} cm⁻³</span>)}
+    </div>
+    <Plot xDomain={[0, 800]} yDomain={[-0.6, 0.6]} xLabel="Temperatura T (K)" yLabel="E_F − E_i (eV)" xTicks={[0, 200, 400, 600, 800]} yTicks={[-0.6, -0.4, -0.2, 0, 0.2, 0.4, 0.6]}>
+      {({ x, y, height }) => <>
+        <rect x={x(0)} y={0} width={x(120) - x(0)} height={height} fill={C.electron} opacity={0.055} />
+        <rect x={x(120)} y={0} width={x(600) - x(120)} height={height} fill={C.conduction} opacity={0.05} />
+        <rect x={x(600)} y={0} width={x(800) - x(600)} height={height} fill={C.teal} opacity={0.065} />
+        <text x={x(60)} y={y(0.55)} textAnchor="middle" className="plot-annotation" fill={C.electron}>Impureses</text>
+        <text x={x(360)} y={y(0.55)} textAnchor="middle" className="plot-annotation" fill={C.conduction}>Saturació</text>
+        <text x={x(700)} y={y(0.55)} textAnchor="middle" className="plot-annotation" fill={C.teal}>Intrínseca</text>
+        {curves.map(curve => <LinePath key={curve.doping} data={curve.data} x={d => x(d.x)} y={d => y(d.y)} stroke={curve.color} strokeWidth={2.4} />)}
+        <line x1={x(0)} x2={x(800)} y1={y(donorOffset)} y2={y(donorOffset)} stroke={C.conduction} strokeWidth={1.5} strokeDasharray="6 4" />
+        <line x1={x(0)} x2={x(800)} y1={y(-donorOffset)} y2={y(-donorOffset)} stroke={C.hole} strokeWidth={1.5} strokeDasharray="6 4" />
+        <text x={x(790)} y={y(donorOffset) - 6} textAnchor="end" className="plot-annotation" fill={C.conduction}>E<tspan baselineShift="sub">D</tspan></text>
+        <text x={x(790)} y={y(-donorOffset) - 6} textAnchor="end" className="plot-annotation" fill={C.hole}>E<tspan baselineShift="sub">A</tspan></text>
+      </>}
+    </Plot>
+  </Card>;
+}
+
 export function IntrinsicCarriers() {
   const [temperature, setTemperature] = useState(300);
   const count = Math.round(3 + 13 * (intrinsicDensity(temperature) / intrinsicDensity(700)) ** 0.35);
