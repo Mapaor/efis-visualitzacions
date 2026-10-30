@@ -6,40 +6,141 @@ import { Range } from '../components/Range';
 import { COLORS as C, E_G, K_B_EV, NC_300, NV_300, format, intrinsicDensity, sample } from '../physics';
 import { Card } from '../components/Card';
 
+type DosPoint = { x: number; y: number };
+
+function areaPath(points: DosPoint[], edgeEnergy: number, xScale: (value: number) => number, yScale: (value: number) => number) {
+  const last = points[points.length - 1];
+  return `M ${xScale(0)} ${yScale(edgeEnergy)} ${points.map(point => `L ${xScale(point.x)} ${yScale(point.y)}`).join(' ')} L ${xScale(0)} ${yScale(last.y)} Z`;
+}
+
+function areaBetweenPath(inner: DosPoint[], outer: DosPoint[], xScale: (value: number) => number, yScale: (value: number) => number) {
+  const reverseInner = [...inner].reverse();
+  return `M ${xScale(outer[0].x)} ${yScale(outer[0].y)} ${outer.slice(1).map(point => `L ${xScale(point.x)} ${yScale(point.y)}`).join(' ')} ${reverseInner.map(point => `L ${xScale(point.x)} ${yScale(point.y)}`).join(' ')} Z`;
+}
+
+function fermiOccupation(energy: number, temperature: number, fermiLevel: number) {
+  if (temperature <= 0) return energy < fermiLevel ? 1 : energy > fermiLevel ? 0 : 0.5;
+  const exponent = Math.max(-60, Math.min(60, (energy - fermiLevel) / (K_B_EV * temperature)));
+  return 1 / (1 + Math.exp(exponent));
+}
+
+function integrateArea(points: DosPoint[]) {
+  return points.slice(1).reduce((sum, point, index) => {
+    const previous = points[index];
+    return sum + (point.x + previous.x) / 2 * Math.abs(point.y - previous.y);
+  }, 0);
+}
+
 export function BandAndDos() {
   const energies = sample(80, 0, 1);
-  const [selectedEnergy, setSelectedEnergy] = useState(1.2);
-  const conductionDos = selectedEnergy >= E_G ? Math.sqrt((selectedEnergy - E_G) / 0.65) : 0;
-  const valenceDos = selectedEnergy <= 0 ? 1.12 * Math.sqrt(-selectedEnergy / 0.65) : 0;
+  const [electronMass, setElectronMass] = useState(1.08);
+  const [holeMass, setHoleMass] = useState(0.56);
+  const electronScale = electronMass ** 1.5;
+  const holeScale = holeMass ** 1.5;
+  const conduction = energies.map(z => ({ x: electronScale * Math.sqrt(z), y: E_G + 0.65 * z }));
+  const valence = energies.map(z => ({ x: 1.12 * holeScale * Math.sqrt(z), y: -0.65 * z }));
+  const electronArea = (2 / 3) * 0.65 * electronScale;
+  const holeArea = (2 / 3) * 0.65 * 1.12 * holeScale;
   return <>
-    <div className="plot-pair"><Plot xDomain={[0, 1]} yDomain={[-0.45, 1.67]} xLabel="Esquema de bandes" yLabel="Energia (eV)" xTicks={[]} yTicks={[0, E_G]} grid={false}>
+    <div className="controls two-controls">
+      <Range label={<><i>m</i><sup>*</sup><sub>nd</sub> · massa efectiva dels electrons</>} value={electronMass} min={0.1} max={2} step={0.01} onChange={setElectronMass} formatValue={v => `${format(v, 2)} m₀`} />
+      <Range label={<><i>m</i><sup>*</sup><sub>pd</sub> · massa efectiva dels forats</>} value={holeMass} min={0.1} max={2} step={0.01} onChange={setHoleMass} formatValue={v => `${format(v, 2)} m₀`} />
+    </div>
+    <Plot xDomain={[0, 4.2]} yDomain={[-0.72, 1.82]} xLabel="Densitat d’estats N(E) · relativa" yLabel="Energia E (eV)" xTicks={[0, 1, 2, 3, 4]} yTicks={[0, E_G]}>
       {({ x, y }) => <>
-        <rect x={x(0.14)} y={y(0)} width={x(0.86) - x(0.14)} height={y(-0.45) - y(0)} fill={C.valence} opacity={0.68} />
-        <rect x={x(0.14)} y={y(E_G + 0.55)} width={x(0.86) - x(0.14)} height={y(E_G) - y(E_G + 0.55)} fill={C.conduction} opacity={0.68} />
-        <rect x={x(0.14)} y={y(E_G)} width={x(0.86) - x(0.14)} height={y(0) - y(E_G)} fill={C.gap} />
-        <text x={x(0.5)} y={y(1.4)} textAnchor="middle" className="plot-annotation">Conducció · electrons</text>
-        <text x={x(0.5)} y={y(-0.2)} textAnchor="middle" className="plot-annotation">València · forats</text>
-        <text x={x(0.5)} y={y(0.56)} textAnchor="middle" className="plot-annotation">Gap prohibit · 1,12 eV</text>
+        <rect x={x(0)} y={y(E_G)} width={x(4.2) - x(0)} height={y(0) - y(E_G)} fill={C.gap} />
+        <path d={areaPath(conduction, E_G, x, y)} fill={C.conduction} opacity={0.24} />
+        <path d={areaPath(valence, 0, x, y)} fill={C.valence} opacity={0.24} />
+        <LinePath data={conduction} x={d => x(d.x)} y={d => y(d.y)} stroke={C.conduction} strokeWidth={3} />
+        <LinePath data={valence} x={d => x(d.x)} y={d => y(d.y)} stroke={C.valence} strokeWidth={3} />
+        <text x={x(2.6)} y={y(1.58)} fill={C.conduction} className="plot-annotation">N<tspan baselineShift="sub">c</tspan>(E)</text>
+        <text x={x(2.6)} y={y(-0.54)} fill={C.valence} className="plot-annotation">N<tspan baselineShift="sub">v</tspan>(E)</text>
       </>}
     </Plot>
-    <div>
-      <Range label="Energia seleccionada E" value={selectedEnergy} min={-0.65} max={1.77} step={0.01} onChange={setSelectedEnergy} formatValue={v => `${format(v, 2)} eV`} />
-      <Plot xDomain={[0, 1.25]} yDomain={[-0.72, 1.82]} xLabel="Densitat d’estats N(E) · relativa" yLabel="Energia E (eV)" xTicks={[0, 0.5, 1]} yTicks={[0, E_G]}>
+    <div className="metric"><span>Àrea ombrejada · conducció</span><strong>{format(electronArea, 2)} unitats relatives · eV</strong><span>Àrea ombrejada · valència</span><strong>{format(holeArea, 2)} unitats relatives · eV</strong></div>
+    <Equation math="N_c(E)\propto (m^*_{nd})^{3/2}\sqrt{E-E_g},\qquad N_v(E)\propto (m^*_{pd})^{3/2}\sqrt{-E}" />
+  </>;
+}
+
+export function FermiDistribution() {
+  const [temperature, setTemperature] = useState(300);
+  const [fermiLevel, setFermiLevel] = useState(E_G / 2);
+  const energies = sample(240, -0.4, 1.52);
+  const distribution = energies.map(energy => ({ x: energy, y: fermiOccupation(energy, temperature, fermiLevel) }));
+  return <Card tag="DISTRIBUCIÓ DE FERMI-DIRAC" title="Probabilitat d’ocupació f(E)">
+    <div className="controls two-controls">
+      <Range label="Temperatura" value={temperature} min={50} max={2000} step={10} onChange={setTemperature} formatValue={v => `${v} K`} />
+      <Range label={<><i>E</i><sub>F</sub></>} value={fermiLevel} min={0} max={E_G} step={0.01} onChange={setFermiLevel} formatValue={v => `${format(v, 2)} eV`} />
+    </div>
+    <Plot xDomain={[-0.4, 1.52]} yDomain={[-0.05, 1.05]} xLabel="Energia E (eV)" yLabel="Ocupació f(E)" xTicks={[0, E_G / 2, E_G]} yTicks={[0, 0.5, 1]}>
+      {({ x, y, height }) => <>
+        <LinePath data={distribution} x={d => x(d.x)} y={d => y(d.y)} stroke={C.fermi} strokeWidth={3} />
+        <line x1={x(fermiLevel)} x2={x(fermiLevel)} y1={0} y2={height} stroke={C.muted} strokeWidth={1.7} strokeDasharray="6 5" />
+        <text x={x(fermiLevel) + 7} y={y(0.08)} fill={C.muted} className="plot-annotation">E<tspan baselineShift="sub">F</tspan></text>
+      </>}
+    </Plot>
+    <Equation math="f(E)=\frac{1}{1+e^{(E-E_F)/(k_BT)}}" />
+  </Card>;
+}
+
+export function ThermalDos() {
+  const [temperature, setTemperature] = useState(0);
+  const fermiLevel = E_G / 2;
+  const visualCarrierGain = 16;
+  const carrierFraction = (probability: number) => Math.min(0.65, visualCarrierGain * probability);
+  const bandSamples = sample(500, 0, 1);
+  const conductionStates = bandSamples.map(z => ({ x: Math.sqrt(z), y: E_G + 0.65 * z }));
+  const valenceStates = bandSamples.map(z => ({ x: Math.sqrt(z), y: -0.65 * z }));
+  const conductionElectrons = conductionStates.map(point => ({
+    x: point.x * carrierFraction(fermiOccupation(point.y, temperature, fermiLevel)),
+    y: point.y,
+  }));
+  const valenceElectrons = valenceStates.map(point => ({
+    x: point.x * (1 - carrierFraction(1 - fermiOccupation(point.y, temperature, fermiLevel))),
+    y: point.y,
+  }));
+  const valenceHoles = valenceStates.map(point => ({
+    x: point.x * carrierFraction(1 - fermiOccupation(point.y, temperature, fermiLevel)),
+    y: point.y,
+  }));
+  const distribution = sample(300, -0.72, 1.82).map(energy => ({
+    x: fermiOccupation(energy, temperature, fermiLevel),
+    y: energy,
+  }));
+
+  return <Card tag="PORTADORS TÈRMICS · DENSITAT D’ESTATS" title="Ocupació dels estats i generació de parelles">
+    <Range label="Temperatura" value={temperature} min={0} max={2000} step={10} onChange={setTemperature} formatValue={v => `${v} K`} />
+    <div className="chart-legend" aria-label="Llegenda de densitats d’estats i portadors">
+      <span><i className="legend-area" style={{ background: C.conduction }} />Estats disponibles · BC</span>
+      <span><i className="legend-area" style={{ background: C.valence }} />Estats disponibles · BV</span>
+      <span><i className="legend-area" style={{ background: C.electron }} />Electrons ocupants · BV i BC</span>
+      <span><i className="legend-area" style={{ background: C.hole }} />Forats p</span>
+    </div>
+    <p className="plot-caption">A 0 K, la BV és plena d’electrons i la BC és buida. En escalfar, els forats apareixen a la BV i els electrons a la BC; les àrees fosques de portadors s’amplifiquen visualment ×16 per fer més visible la generació. La distribució f(E) es manté sense amplificar.</p>
+    <div className="plot-pair">
+      <Plot xDomain={[0, 1.5]} yDomain={[-0.72, 1.82]} xLabel="Densitat d’estats N(E) · relativa" yLabel="Energia E (eV)" xTicks={[0, 0.5, 1, 1.5]} yTicks={[0, E_G]}>
         {({ x, y }) => <>
-          <rect x={x(0)} y={y(E_G)} width={x(1.25) - x(0)} height={y(0) - y(E_G)} fill={C.gap} />
-          <LinePath data={energies.map(z => ({ x: Math.sqrt(z), y: E_G + 0.65 * z }))} x={d => x(d.x)} y={d => y(d.y)} stroke={C.conduction} strokeWidth={3} />
-          <LinePath data={energies.map(z => ({ x: 1.12 * Math.sqrt(z), y: -0.65 * z }))} x={d => x(d.x)} y={d => y(d.y)} stroke={C.valence} strokeWidth={3} />
-          <line x1={x(0)} x2={x(1.25)} y1={y(selectedEnergy)} y2={y(selectedEnergy)} stroke={C.ink} strokeDasharray="4 4" opacity={0.7} />
-          {conductionDos > 0 && <circle cx={x(conductionDos)} cy={y(selectedEnergy)} r={5} fill={C.conduction} stroke="white" strokeWidth={2} />}
-          {valenceDos > 0 && <circle cx={x(valenceDos)} cy={y(selectedEnergy)} r={5} fill={C.valence} stroke="white" strokeWidth={2} />}
-          <text x={x(0.72)} y={y(1.58)} fill={C.conduction} className="plot-annotation">N<tspan baselineShift="sub">c</tspan>(E)</text>
-          <text x={x(0.72)} y={y(-0.54)} fill={C.valence} className="plot-annotation">N<tspan baselineShift="sub">v</tspan>(E)</text>
+          <rect x={x(0)} y={y(E_G)} width={x(1.5) - x(0)} height={y(0) - y(E_G)} fill={C.gap} />
+          <path d={areaPath(conductionStates, E_G, x, y)} fill={C.conduction} opacity={0.18} />
+          <path d={areaPath(valenceStates, 0, x, y)} fill={C.valence} opacity={0.18} />
+          <path d={areaPath(conductionElectrons, E_G, x, y)} fill={C.electron} opacity={0.86} />
+          <path d={areaPath(valenceElectrons, 0, x, y)} fill={C.electron} opacity={0.86} />
+          <path d={areaBetweenPath(valenceElectrons, valenceStates, x, y)} fill={C.hole} opacity={0.9} />
+          <LinePath data={conductionStates} x={d => x(d.x)} y={d => y(d.y)} stroke={C.conduction} strokeWidth={2.5} />
+          <LinePath data={valenceStates} x={d => x(d.x)} y={d => y(d.y)} stroke="#243c55" strokeWidth={2.5} />
         </>}
       </Plot>
-    </div></div>
-    <div className="metric"><span>N<sub>v</sub>(E) · valència</span><strong>{format(valenceDos, 2)}</strong><span>N<sub>c</sub>(E) · conducció</span><strong>{format(conductionDos, 2)}</strong><span>Valors relatius; dins del gap, tots dos són 0.</span></div>
-    <Equation math="N_c(E)=\sqrt{\frac{E-E_g}{0.65}}\;(E\ge E_g),\qquad N_v(E)=1.12\sqrt{\frac{-E}{0.65}}\;(E\le 0)" />
-  </>;
+      <Plot xDomain={[0, 1]} yDomain={[-0.72, 1.82]} xLabel="Ocupació f(E)" yLabel="Energia E (eV)" xTicks={[0, 0.5, 1]} yTicks={[0, E_G]}>
+        {({ x, y }) => <>
+          <LinePath data={distribution} x={d => x(d.x)} y={d => y(d.y)} stroke={C.fermi} strokeWidth={3} />
+          <line x1={x(0)} x2={x(1)} y1={y(fermiLevel)} y2={y(fermiLevel)} stroke={C.muted} strokeWidth={1.7} strokeDasharray="6 5" />
+          <text x={x(0.96)} y={y(fermiLevel) - 7} textAnchor="end" fill={C.muted} className="plot-annotation">E<tspan baselineShift="sub">F</tspan></text>
+        </>}
+      </Plot>
+    </div>
+    <div className="metric"><span>Electrons n · àrea BC</span><strong>{integrateArea(conductionElectrons).toExponential(2)} unitats relatives · eV</strong><span>Forats p · àrea despintada BV</span><strong>{integrateArea(valenceHoles).toExponential(2)} unitats relatives · eV</strong></div>
+    <Equation math="n_{\mathrm{vis}}\propto\int_{E_C}^{\infty}N_c(E)\min(0.65,16f(E))\,dE,\qquad p_{\mathrm{vis}}\propto\int_{-\infty}^{E_V}N_v(E)\min(0.65,16[1-f(E)])\,dE" />
+  </Card>;
 }
 
 export function IntrinsicCarriers() {

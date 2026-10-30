@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Card } from './components/Card';
-import { BandAndDos, DopedStatistics, IntrinsicCarriers, ShockleyRegimes } from './visualizations/Tema2';
+import { BandAndDos, DopedStatistics, FermiDistribution, IntrinsicCarriers, ShockleyRegimes, ThermalDos } from './visualizations/Tema2';
 import { BandFormation, EffectiveMass, PotentialAndOrbitals } from './visualizations/Tema1';
 import { TransportEquilibrium } from './visualizations/Tema3';
 import { MinorityCarriers } from './visualizations/Tema4';
@@ -64,6 +64,8 @@ export default function App() {
           <Card tag="SEMICONDUCTOR INTRÍNSEC" title="Generació tèrmica de parelles"><IntrinsicCarriers /></Card>
           <Card tag="DENSITAT D’ESTATS" title="N(E), Nᵥ(E) i N꜀(E)"><BandAndDos /></Card>
         </div>
+        <div className="grid single lower-grid"><FermiDistribution /></div>
+        <div className="grid single lower-grid"><ThermalDos /></div>
       </section>
 
       <section className="chapter" id="tema3">
