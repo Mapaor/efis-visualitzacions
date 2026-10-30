@@ -158,7 +158,8 @@ export function ExtrinsicDos() {
   const kT = K_B_EV * temperature;
   const referenceDos300 = Math.sqrt(NC_300 * NV_300);
   const intrinsic = referenceDos300 * (temperature / 300) ** 1.5 * Math.exp(-E_G / (2 * kT));
-  const netDoping = dopingPosition / 100 * 1e19;
+  // Negative slider values are donor doping (n-type); positive values are acceptor doping (p-type).
+  const netDoping = -dopingPosition / 20 * 1e18;
   const dopantConcentration = Math.abs(netDoping);
   const majority = (Math.abs(netDoping) + Math.sqrt(netDoping ** 2 + 4 * intrinsic ** 2)) / 2;
   const electrons = netDoping >= 0 ? majority : intrinsic ** 2 / majority;
@@ -191,31 +192,36 @@ export function ExtrinsicDos() {
   const dopingLabel = dopingPosition === 0
     ? 'Dopatge net nul'
     : `${dopingPosition < 0 ? 'Nᴅ' : 'Nₐ'} = ${dopantConcentration.toExponential(1)} cm⁻³`;
+  const spectralSamples = sample(240, 0, 1);
+  // A cosine-shaped cutoff gives the far end a visible rounded return to zero.
+  const spectralShape = (z: number) => Math.exp(-2.1 * z) * Math.sin((1 - z) * Math.PI / 2) ** 2;
+  const rawElectronProfile = spectralSamples.map(z => ({ x: spectralShape(z), y: E_G + 0.65 * z }));
+  const rawHoleProfile = spectralSamples.map(z => ({ x: spectralShape(z), y: -0.65 * z }));
+  const electronProfileArea = integrateArea(rawElectronProfile);
+  const holeProfileArea = integrateArea(rawHoleProfile);
+  const electronSpectrum = rawElectronProfile.map(point => ({ ...point, x: point.x * electrons / electronProfileArea }));
+  const holeSpectrum = rawHoleProfile.map(point => ({ ...point, x: point.x * holes / holeProfileArea }));
+  const spectrumMax = Math.max(...electronSpectrum.map(point => point.x), ...holeSpectrum.map(point => point.x)) * 1.12;
 
   return <Card tag="SEMICONDUCTOR EXTRÍNSEC · T = 900 K" title="Dopatge, portadors i nivell de Fermi">
-    <Range label="Dopatge · tipus n ← intrínsec → tipus p" value={dopingPosition} min={-100} max={100} step={1} onChange={setDopingPosition} formatValue={() => dopingLabel} />
+    <Range label="Dopatge · tipus n ← intrínsec → tipus p" value={dopingPosition} min={-20} max={20} step={1} onChange={setDopingPosition} formatValue={() => dopingLabel} />
     <div className="insight"><strong>{semiconductorType}</strong> · n = {electrons.toExponential(2)} cm⁻³, p = {holes.toExponential(2)} cm⁻³. E<sub>F</sub> = {fermiLevel.toFixed(3)} eV.</div>
-    <div className="chart-legend" aria-label="Llegenda de densitats d’estats i portadors">
-      <span><i className="legend-area" style={{ background: C.conduction }} />Estats totals · BC</span>
-      <span><i className="legend-area" style={{ background: C.valence }} />Estats totals · BV</span>
-      <span><i className="legend-area" style={{ background: C.electron }} />Electrons n</span>
-      <span><i className="legend-area" style={{ background: C.hole }} />Forats p</span>
+    <div className="chart-legend" aria-label="Llegenda de densitats espectrals de portadors">
+      <span><i className="legend-area" style={{ background: C.electron }} />Electrons n(E) · àrea = n</span>
+      <span><i className="legend-area" style={{ background: C.hole }} />Forats p(E) · àrea = p</span>
       <span><i className="legend-line" style={{ borderColor: C.fermi }} />f(E)</span>
       <span><i className="legend-line" style={{ borderColor: C.hole }} />1 − f(E)</span>
     </div>
     <div className="plot-pair">
-      <Plot xDomain={[0, 1.5]} yDomain={[-0.72, 1.82]} xLabel="Densitat d’estats N(E) · relativa" yLabel="Energia E (eV)" xTicks={[0, 0.5, 1, 1.5]} yTicks={[0, E_G]}>
+      <Plot xDomain={[0, spectrumMax]} yDomain={[-0.72, 1.82]} xLabel="Densitat espectral n(E) | p(E) (cm⁻³ eV⁻¹)" yLabel="Energia E (eV)" xTicks={[0, spectrumMax / 2, spectrumMax]} xFormat={value => value === 0 ? '0' : value.toExponential(1)} yTicks={[0, E_G]}>
         {({ x, y }) => <>
-          <rect x={x(0)} y={y(E_G)} width={x(1.5) - x(0)} height={y(0) - y(E_G)} fill={C.gap} />
-          <path d={areaPath(conductionStates, E_G, x, y)} fill={C.conduction} opacity={0.18} />
-          <path d={areaPath(valenceStates, 0, x, y)} fill={C.valence} opacity={0.18} />
-          <path d={areaPath(conductionElectrons, E_G, x, y)} fill={C.electron} opacity={0.86} />
-          <path d={areaPath(valenceElectrons, 0, x, y)} fill={C.electron} opacity={0.86} />
-          <path d={areaBetweenPath(valenceElectrons, valenceStates, x, y)} fill={C.hole} opacity={0.9} />
-          <LinePath data={conductionStates} x={d => x(d.x)} y={d => y(d.y)} stroke={C.conduction} strokeWidth={2.5} />
-          <LinePath data={valenceStates} x={d => x(d.x)} y={d => y(d.y)} stroke="#243c55" strokeWidth={2.5} />
-          <line x1={x(0)} x2={x(1.5)} y1={y(fermiLevel)} y2={y(fermiLevel)} stroke={C.muted} strokeWidth={1.6} strokeDasharray="6 5" />
-          <text x={x(1.46)} y={y(fermiLevel) - 7} textAnchor="end" fill={C.muted} className="plot-annotation">E<tspan baselineShift="sub">F</tspan></text>
+          <rect x={x(0)} y={y(E_G)} width={x(spectrumMax) - x(0)} height={y(0) - y(E_G)} fill={C.gap} />
+          <path d={areaPath(electronSpectrum, E_G, x, y)} fill={C.electron} opacity={0.65} />
+          <path d={areaPath(holeSpectrum, 0, x, y)} fill={C.hole} opacity={0.65} />
+          <LinePath data={electronSpectrum} x={d => x(d.x)} y={d => y(d.y)} stroke={C.electron} strokeWidth={2.5} />
+          <LinePath data={holeSpectrum} x={d => x(d.x)} y={d => y(d.y)} stroke={C.hole} strokeWidth={2.5} />
+          <line x1={x(0)} x2={x(spectrumMax)} y1={y(fermiLevel)} y2={y(fermiLevel)} stroke={C.muted} strokeWidth={1.6} strokeDasharray="6 5" />
+          <text x={x(spectrumMax * 0.97)} y={y(fermiLevel) - 7} textAnchor="end" fill={C.muted} className="plot-annotation">E<tspan baselineShift="sub">F</tspan></text>
         </>}
       </Plot>
       <Plot xDomain={[0, 1]} yDomain={[-0.72, 1.82]} xLabel="Probabilitat" yLabel="Energia E (eV)" xTicks={[0, 0.5, 1]} yTicks={[0, E_G]}>
@@ -572,12 +578,12 @@ function CarrierEnergyDistribution() {
   const energies = sample(240, 0, 1);
   const rawElectrons = energies.map(z => {
     const energy = E_G + 0.65 * z;
-    const tail = Math.exp(-2.6 * z) * (1 - z) ** 2;
+    const tail = Math.exp(-2.1 * z) * Math.sin((1 - z) * Math.PI / 2) ** 2;
     return { x: tail, y: energy };
   });
   const rawHoles = energies.map(z => {
     const energy = -0.65 * z;
-    const tail = Math.exp(-2.6 * z) * (1 - z) ** 2;
+    const tail = Math.exp(-2.1 * z) * Math.sin((1 - z) * Math.PI / 2) ** 2;
     return { x: tail, y: energy };
   });
   const electronArea = integrateArea(rawElectrons);
