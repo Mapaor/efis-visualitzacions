@@ -686,6 +686,8 @@ export function ThermalStatisticsPanels() {
 }
 
 export function DopedStatistics() {
+  const [showChargeSums, setShowChargeSums] = useState(false);
+  const [hideIndividualCurves, setHideIndividualCurves] = useState(false);
   const [logDonors, setLogDonors] = useState(16);
   const [logAcceptors, setLogAcceptors] = useState(15);
   const [logNc300, setLogNc300] = useState(Math.log10(NC_300));
@@ -772,22 +774,45 @@ export function DopedStatistics() {
       <Range label={<><i>E</i><sub>A</sub></>} value={acceptorLevel} min={0.01} max={0.15} step={0.001} onChange={setAcceptorLevel} formatValue={v => `${format(v, 3)} eV`} />
     </div>
     <Range label="Temperatura" value={temperature} min={200} max={700} step={10} onChange={setTemperature} formatValue={v => `${v} K`} />
+    <div className="charge-sum-controls">
+      <label className="charge-sum-toggle">
+        <input type="checkbox" checked={showChargeSums} onChange={event => {
+          setShowChargeSums(event.target.checked);
+          if (!event.target.checked) setHideIndividualCurves(false);
+        }} />
+        <span>Mostrar suma de portadors i dopants</span>
+      </label>
+      {showChargeSums && <label className="charge-sum-toggle">
+        <input type="checkbox" checked={hideIndividualCurves} onChange={event => setHideIndividualCurves(event.target.checked)} />
+        <span>Amagar electrons, forats i dopants</span>
+      </label>}
+    </div>
     <p className="plot-caption">M<sub>C</sub> fixa el valor de n quan E<sub>F</sub> = E<sub>C</sub>; M<sub>V</sub> fixa p quan E<sub>F</sub> = E<sub>V</sub>. Tots dos valors varien amb la temperatura com T<sup>3/2</sup>.</p>
     <div className="chart-legend" aria-label="Llegenda de concentracions segons el nivell de Fermi">
-      <span><i className="legend-line" style={{ borderColor: C.electron }} />Electrons n</span>
-      <span><i className="legend-line" style={{ borderColor: C.hole }} />Forats p</span>
-      <span><i className="legend-line" style={{ borderColor: C.conduction }} />Donadors ionitzats Nᴅ⁺</span>
-      <span><i className="legend-line" style={{ borderColor: C.purple }} />Acceptadors ionitzats Nₐ⁻</span>
+      {!hideIndividualCurves && <>
+        <span><i className="legend-line" style={{ borderColor: C.electron }} />Electrons n</span>
+        <span><i className="legend-line" style={{ borderColor: C.hole }} />Forats p</span>
+        <span><i className="legend-line" style={{ borderColor: C.conduction }} />Donadors ionitzats Nᴅ⁺</span>
+        <span><i className="legend-line" style={{ borderColor: C.purple }} />Acceptadors ionitzats Nₐ⁻</span>
+      </>}
+      {showChargeSums && <>
+        <span><i className="legend-line legend-dashed" style={{ borderColor: '#d97706' }} />p + Nᴅ⁺</span>
+        <span><i className="legend-line legend-dashed" style={{ borderColor: '#65a30d' }} />n + Nₐ⁻</span>
+      </>}
       <span><i className="legend-line legend-dashed" style={{ borderColor: C.muted }} />Intrínseca nᵢ</span>
       <span><i className="legend-line legend-dashed" style={{ borderColor: C.muted }} />Nivell intrínsec Eᵢ</span>
     </div>
     <Plot xDomain={[0, E_G]} yDomain={[0, 23]} xLabel="Nivell de Fermi E_F: E_V → E_C (eV)" yLabel="log₁₀ concentració (cm⁻³)" xTicks={[0, intrinsicLevel, E_G]} xFormat={value => value === 0 ? 'E_V' : Math.abs(value - intrinsicLevel) < 0.01 ? 'E_i' : 'E_C'} yTicks={[0, 5, 10, 15, 20, 22]}>
         {({ x, y }) => <>
           <rect x={x(0)} y={y(23)} width={x(E_G) - x(0)} height={y(0) - y(23)} fill={C.gap} opacity={0.42} />
-          {[
+          {!hideIndividualCurves && [
             { key: 'n', color: C.electron }, { key: 'p', color: C.hole },
             { key: 'ionizedDonors', color: C.conduction }, { key: 'ionizedAcceptors', color: C.purple },
           ].map(line => <LinePath key={line.key} data={carrierCurves.map(d => ({ x: d.x, y: Math.log10(Math.max(d[line.key as keyof typeof d] as number, 1)) }))} x={d => x(d.x)} y={d => y(d.y)} stroke={line.color} strokeWidth={2.8} />)}
+          {showChargeSums && <>
+            <LinePath data={carrierCurves.map(d => ({ x: d.x, y: Math.log10(Math.max(d.p + d.ionizedDonors, 1)) }))} x={d => x(d.x)} y={d => y(d.y)} stroke="#d97706" strokeWidth={2.5} strokeDasharray="7 4" />
+            <LinePath data={carrierCurves.map(d => ({ x: d.x, y: Math.log10(Math.max(d.n + d.ionizedAcceptors, 1)) }))} x={d => x(d.x)} y={d => y(d.y)} stroke="#65a30d" strokeWidth={2.5} strokeDasharray="7 4" />
+          </>}
           <line x1={x(0)} x2={x(E_G)} y1={y(Math.log10(Math.max(ni, 1)))} y2={y(Math.log10(Math.max(ni, 1)))} stroke={C.muted} strokeWidth={1.1} strokeDasharray="4 5" opacity={0.55} />
           <text x={x(E_G) - 5} y={y(Math.log10(Math.max(ni, 1))) - 7} textAnchor="end" className="plot-annotation" fill={C.muted}>nᵢ</text>
           <line x1={x(intrinsicLevel)} x2={x(intrinsicLevel)} y1={y(0)} y2={y(23)} stroke={C.muted} strokeWidth={1.1} strokeDasharray="4 5" opacity={0.55} />

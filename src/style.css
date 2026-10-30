@@ -20,6 +20,7 @@ main{max-width:1200px;margin:0 auto;padding:28px 24px 0}
 .card h3{font-size:15px;font-weight:620;letter-spacing:-.015em;margin:4px 0 0}
 .controls{display:flex;gap:16px;margin:10px 0 4px}.two-controls{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}
 .three-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.charge-sum-controls{display:flex;align-items:center;gap:20px;flex-wrap:wrap}.charge-sum-toggle{display:inline-flex;align-items:center;gap:8px;margin:10px 0 4px;color:#405168;font-size:13px;cursor:pointer}.charge-sum-toggle input{width:16px;height:16px;accent-color:#267a78}
 .dopant-switch{display:flex;gap:8px;margin:8px 0}.dopant-switch button{border:1px solid var(--line);border-radius:5px;background:#fff;color:#536174;padding:7px 10px;font:inherit;font-size:11px;cursor:pointer}.dopant-switch button[aria-pressed="true"]{border-color:#7f9cbb;background:#eef3f8;color:#253950;font-weight:650}
 .range-control{display:grid;grid-template-columns:1fr auto;gap:5px 10px;align-items:center;min-width:0;font-size:11px;font-weight:550;color:#536174}
 .range-control strong{font-size:11px;color:#253549;font-variant-numeric:tabular-nums}.range-control input{grid-column:1/3;width:100%;accent-color:#4b81bd;cursor:pointer}
