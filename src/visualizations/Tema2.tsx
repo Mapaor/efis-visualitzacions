@@ -376,6 +376,11 @@ const holeMotionPath = [
   { atom: 0, direction: 1 }, { atom: 0, direction: 2 },
 ];
 
+const freeElectronFrames = Array.from({ length: 26 }, (_, index) => ({
+  x: 160 + index * 4.8 + 2.2 * Math.sin(index * 1.3),
+  y: 112 + 8 * Math.sin(index * 0.85) + 3 * Math.cos(index * 0.47),
+}));
+
 function HoleMotion() {
   const [step, setStep] = useState(0);
   const atoms = Array.from({ length: 9 }, (_, index) => ({ index, col: index % 3, row: Math.floor(index / 3), x: 100 + (index % 3) * 200, y: 62 + Math.floor(index / 3) * 100 }));
@@ -430,6 +435,135 @@ function HoleMotion() {
   </Card>;
 }
 
+function FreeElectronMotion() {
+  const [step, setStep] = useState(0);
+  const atoms = Array.from({ length: 9 }, (_, index) => ({ index, col: index % 3, row: Math.floor(index / 3), x: 100 + (index % 3) * 200, y: 62 + Math.floor(index / 3) * 100 }));
+  const directions = [{ x: 0, y: -25 }, { x: 25, y: 0 }, { x: 0, y: 25 }, { x: -25, y: 0 }];
+  const electron = freeElectronFrames[step];
+  const trail = freeElectronFrames.slice(Math.max(0, step - 4), step);
+
+  return <Card tag="TRANSPORT D’ELECTRONS · MODEL ESQUEMÀTIC" title="Moviment dels electrons lliures">
+    <p className="plot-caption">L’electró lliure es desplaça a petits salts entre els àtoms. Les marques més pàl·lides indiquen algunes de les seves posicions immediatament anteriors.</p>
+    <Range label="Temps" value={step} min={0} max={freeElectronFrames.length - 1} step={1} onChange={setStep} formatValue={value => `pas ${value + 1} / ${freeElectronFrames.length}`} />
+    <svg className="plot-svg" viewBox="0 0 600 340" role="img" aria-label={`Electró lliure a la posició ${step + 1} de ${freeElectronFrames.length} dins una xarxa de silici`}>
+      <g stroke="#cbd4df" strokeWidth="2">
+        {atoms.filter(atom => atom.col < 2).map(atom => <line key={`h-${atom.index}`} x1={atom.x} y1={atom.y} x2={atom.x + 200} y2={atom.y} />)}
+        {atoms.filter(atom => atom.row < 2).map(atom => <line key={`v-${atom.index}`} x1={atom.x} y1={atom.y} x2={atom.x} y2={atom.y + 100} />)}
+      </g>
+      {atoms.map(atom => <g key={`atom-${atom.index}`}>
+        <circle cx={atom.x} cy={atom.y} r={17} fill="#f6f8fb" stroke="#738398" strokeWidth={1.5} />
+        <text x={atom.x} y={atom.y + 4} textAnchor="middle" className="plot-annotation">Si</text>
+        {directions.map((direction, directionIndex) => <circle key={`${atom.index}-${directionIndex}`} cx={atom.x + direction.x} cy={atom.y + direction.y} r={4.5} fill={C.valence} stroke="white" strokeWidth={1} />)}
+      </g>)}
+      {trail.map((position, index) => <circle key={`trail-${step - trail.length + index}`} cx={position.x} cy={position.y} r={5 + index * 0.5} fill={C.electron} opacity={0.14 + index * 0.12} />)}
+      <circle cx={electron.x} cy={electron.y} r={8} fill={C.electron} stroke="white" strokeWidth={2} />
+      <text x={electron.x + 12} y={electron.y - 8} className="plot-annotation" fill={C.electron}>e⁻ lliure</text>
+    </svg>
+    <div className="chart-legend" aria-label="Llegenda del moviment dels electrons">
+      <span><i className="legend-area" style={{ background: C.valence }} />Electrons enllaçats</span>
+      <span><i className="legend-area" style={{ background: C.electron }} />Electró lliure i posicions recents</span>
+    </div>
+  </Card>;
+}
+
+const recombinationHolePath = [
+  ...holeMotionPath.slice(0, 10),
+  { atom: 7, direction: 0 }, { atom: 4, direction: 2 },
+  { atom: 4, direction: 3 }, { atom: 4, direction: 0 },
+  { atom: 4, direction: 2 }, { atom: 4, direction: 1 },
+  { atom: 4, direction: 0 }, { atom: 4, direction: 3 },
+  { atom: 4, direction: 2 }, { atom: 4, direction: 0 },
+  { atom: 4, direction: 3 }, { atom: 4, direction: 2 },
+  { atom: 4, direction: 0 }, { atom: 4, direction: 1 },
+  { atom: 4, direction: 1 }, { atom: 4, direction: 1 },
+];
+
+function Recombination() {
+  const [step, setStep] = useState(0);
+  const atoms = Array.from({ length: 9 }, (_, index) => ({ index, col: index % 3, row: Math.floor(index / 3), x: 100 + (index % 3) * 200, y: 62 + Math.floor(index / 3) * 100 }));
+  const directions = [{ x: 0, y: -25 }, { x: 25, y: 0 }, { x: 0, y: 25 }, { x: -25, y: 0 }];
+  const slotPoint = (slot: { atom: number; direction: number }) => {
+    const atom = atoms[slot.atom];
+    const direction = directions[slot.direction];
+    return { x: atom.x + direction.x, y: atom.y + direction.y };
+  };
+  const lastStep = recombinationHolePath.length - 1;
+  const hole = recombinationHolePath[step];
+  const holePoint = slotPoint(hole);
+  const progress = step / lastStep;
+  const electron = { x: 205 + (holePoint.x - 205) * progress, y: 245 + (holePoint.y - 245) * progress };
+  const trailStart = Math.max(0, step - 3);
+  const trail = Array.from({ length: step - trailStart }, (_, index) => {
+    const frame = trailStart + index;
+    const position = slotPoint(recombinationHolePath[frame]);
+    const frameProgress = frame / lastStep;
+    return { x: 205 + (position.x - 205) * frameProgress, y: 245 + (position.y - 245) * frameProgress };
+  });
+  const recombined = step === lastStep;
+
+  return <Card tag="RECOMBINACIÓ · MODEL ESQUEMÀTIC" title="Recombinació">
+    <p className="plot-caption">El forat es desplaça per la xarxa mentre l’electró lliure s’hi acosta. En l’últim pas, l’electró ocupa l’enllaç buit i la parella es recombina.</p>
+    <Range label="Temps" value={step} min={0} max={lastStep} step={1} onChange={setStep} formatValue={value => `pas ${value + 1} / ${lastStep + 1}`} />
+    <svg className="plot-svg" viewBox="0 0 600 340" role="img" aria-label={recombined ? 'L’electró lliure ha ocupat el forat: recombinació completa' : `Forat i electró lliure en moviment, pas ${step + 1} de ${lastStep + 1}`}>
+      <g stroke="#cbd4df" strokeWidth="2">
+        {atoms.filter(atom => atom.col < 2).map(atom => <line key={`h-${atom.index}`} x1={atom.x} y1={atom.y} x2={atom.x + 200} y2={atom.y} />)}
+        {atoms.filter(atom => atom.row < 2).map(atom => <line key={`v-${atom.index}`} x1={atom.x} y1={atom.y} x2={atom.x} y2={atom.y + 100} />)}
+      </g>
+      {atoms.map(atom => <g key={`atom-${atom.index}`}>
+        <circle cx={atom.x} cy={atom.y} r={17} fill="#f6f8fb" stroke="#738398" strokeWidth={1.5} />
+        <text x={atom.x} y={atom.y + 4} textAnchor="middle" className="plot-annotation">Si</text>
+        {directions.map((direction, directionIndex) => {
+          const isHole = !recombined && hole.atom === atom.index && hole.direction === directionIndex;
+          const isRecombinedSlot = recombined && hole.atom === atom.index && hole.direction === directionIndex;
+          const cx = atom.x + direction.x;
+          const cy = atom.y + direction.y;
+          return isHole
+            ? <g key={`${atom.index}-${directionIndex}`}><circle cx={cx} cy={cy} r={8} fill="white" stroke={C.hole} strokeWidth={2.5} /><text x={cx + 10} y={cy + 4} className="plot-annotation" fill={C.hole}>h⁺</text></g>
+            : <g key={`${atom.index}-${directionIndex}`}><circle cx={cx} cy={cy} r={isRecombinedSlot ? 6.5 : 4.5} fill={isRecombinedSlot ? C.electron : C.valence} stroke="white" strokeWidth={1} />{isRecombinedSlot && <text x={cx + 9} y={cy - 7} className="plot-annotation" fill={C.electron}>e⁻ capturat</text>}</g>;
+        })}
+      </g>)}
+      {trail.map((position, index) => <circle key={`trail-${step - trail.length + index}`} cx={position.x} cy={position.y} r={5 + index * 0.5} fill={C.electron} opacity={0.14 + index * 0.12} />)}
+      {!recombined && <><circle cx={electron.x} cy={electron.y} r={8} fill={C.electron} stroke="white" strokeWidth={2} /><text x={electron.x + 12} y={electron.y - 8} className="plot-annotation" fill={C.electron}>e⁻ lliure</text></>}
+    </svg>
+    <p className="plot-caption">{recombined ? 'Pas final: l’electró ocupa el forat i desapareixen tots dos portadors.' : `Pas ${step + 1}: encara hi ha un forat i un electró lliure; l’electró s’hi va acostant.`}</p>
+    <div className="chart-legend" aria-label="Llegenda de recombinació">
+      <span><i className="legend-area" style={{ background: C.valence }} />Electrons enllaçats</span>
+      <span><i className="legend-area" style={{ background: 'white', border: `2px solid ${C.hole}` }} />Forat</span>
+      <span><i className="legend-area" style={{ background: C.electron }} />Electró lliure</span>
+    </div>
+  </Card>;
+}
+
+function GenerationRecombination() {
+  const initialTemperature = 300;
+  const [finalTemperature, setFinalTemperature] = useState(500);
+  const logPairChange = Math.log(intrinsicDensity(finalTemperature)) - Math.log(intrinsicDensity(initialTemperature));
+  const initialRate = 5;
+  const finalRate = initialRate * Math.exp(Math.max(-Math.log(1.8), Math.min(Math.log(1.8), 0.1 * logPairChange)));
+  const times = sample(160, -2, 10);
+  const generation = [{ x: -2, y: initialRate }, { x: 0, y: initialRate }, { x: 0, y: finalRate }, { x: 10, y: finalRate }];
+  const recombination = times.map(time => ({ x: time, y: time <= 0 ? initialRate : finalRate + (initialRate - finalRate) * Math.exp(-time / 2.2) }));
+
+  return <Card tag="DINÀMICA DE PORTADORS · MODEL ESQUEMÀTIC" title="Generació i recombinació">
+    <Range label="Temperatura final" value={finalTemperature} min={50} max={700} step={10} onChange={setFinalTemperature} formatValue={value => `${value} K`} />
+    <p className="plot-caption">Es parteix de l’equilibri a T = {initialTemperature} K. A t = 0, la temperatura canvia bruscament: la generació salta al nou valor i la recombinació s’hi acosta gradualment. A l’equilibri, G = R.</p>
+    <div className="chart-legend" aria-label="Llegenda de generació i recombinació">
+      <span><i className="legend-line" style={{ borderColor: C.electron }} />Generació G</span>
+      <span><i className="legend-line" style={{ borderColor: C.hole }} />Recombinació R</span>
+    </div>
+    <Plot xDomain={[-2, 10]} yDomain={[0, 10]} xLabel="Temps després del canvi de temperatura (τ)" yLabel="Taxa relativa de parelles" xTicks={[-2, 0, 2, 4, 6, 8, 10]} yTicks={[0, 2, 4, 5, 6, 8, 10]}>
+      {({ x, y, height }) => <>
+        <rect x={x(0)} y={0} width={x(10) - x(0)} height={height} fill={C.teal} opacity={0.045} />
+        <LinePath data={generation} x={point => x(point.x)} y={point => y(point.y)} stroke={C.electron} strokeWidth={2.7} />
+        <LinePath data={recombination} x={point => x(point.x)} y={point => y(point.y)} stroke={C.hole} strokeWidth={2.7} />
+        <line x1={x(0)} x2={x(0)} y1={y(0)} y2={y(10)} stroke={C.muted} strokeWidth={1.4} strokeDasharray="5 4" />
+        <text x={x(0) + 5} y={y(9.4)} className="plot-annotation" fill={C.muted}>canvi T</text>
+      </>}
+    </Plot>
+    <p className="plot-caption">Taxes relatives a l’equilibri inicial, amb la variació final comprimida esquemàticament. Si T inicial = T final, G i R coincideixen en una sola línia horitzontal.</p>
+  </Card>;
+}
+
 function CarrierEnergyDistribution() {
   const [temperature, setTemperature] = useState(700);
   const ncT = NC_300 * (temperature / 300) ** 1.5;
@@ -476,6 +610,57 @@ function CarrierEnergyDistribution() {
   </Card>;
 }
 
+function DensityOfStatesDimensions() {
+  const plot = { left: 42, right: 244, top: 30, bottom: 158 };
+  const x = (energy: number) => plot.left + ((energy + 0.1) / 1.1) * (plot.right - plot.left);
+  const y = (density: number) => plot.bottom - (density / 1.1) * (plot.bottom - plot.top);
+  const energySamples = sample(120, 0.02, 1);
+  const oneDimensional = energySamples.map(energy => ({ x: energy, y: Math.min(1.05, Math.sqrt(0.04 / energy)) }));
+  const threeDimensional = sample(120, 0, 1).map(energy => ({ x: energy, y: Math.sqrt(energy) }));
+  const panels = [
+    { id: '0d', title: '0D · Punt quàntic', law: 'g(E) ∝ δ(E)', color: C.electron },
+    { id: '1d', title: '1D', law: 'g(E) ∝ E⁻¹ᐟ²', color: C.hole },
+    { id: '2d', title: '2D', law: 'g(E) ∝ E⁰ = constant', color: C.teal },
+    { id: '3d', title: '3D', law: 'g(E) ∝ √E', color: C.conduction },
+  ] as const;
+
+  return <Card tag="DENSITAT D’ESTATS · DEPENDÈNCIA DIMENSIONAL" title="Densitat d’estats segons la dimensió">
+    <p className="plot-caption">Formes normalitzades des de la vora d’energia E₀; cada mini gràfic mostra la dependència característica de la densitat d’estats.</p>
+    <div className="dimension-plots">
+      {panels.map(panel => <div className="dimension-panel" key={panel.id}>
+        <h4>{panel.title}</h4>
+        <svg className="dimension-plot" viewBox="0 0 260 195" role="img" aria-label={`${panel.title}, ${panel.law}`}>
+          <g stroke="#e7ebf0" strokeWidth="1">
+            {[0.5, 1].map(value => <line key={value} x1={plot.left} x2={plot.right} y1={y(value)} y2={y(value)} />)}
+          </g>
+          <g stroke="#9ba8b8" strokeWidth="1.2">
+            <line x1={plot.left} x2={plot.right} y1={plot.bottom} y2={plot.bottom} />
+            <line x1={plot.left} x2={plot.left} y1={plot.top} y2={plot.bottom} />
+            <line x1={x(0)} x2={x(0)} y1={plot.bottom} y2={plot.bottom + 4} />
+            <line x1={x(1)} x2={x(1)} y1={plot.bottom} y2={plot.bottom + 4} />
+          </g>
+          <text x={x(0)} y={plot.bottom + 16} textAnchor="middle" className="dimension-axis">E₀</text>
+          <text x={x(1)} y={plot.bottom + 16} textAnchor="middle" className="dimension-axis">E</text>
+          <text x={plot.left - 7} y={plot.bottom + 3} textAnchor="end" className="dimension-axis">0</text>
+          <text x={plot.left - 7} y={y(1) + 3} textAnchor="end" className="dimension-axis">1</text>
+          <text transform={`translate(13 ${(plot.top + plot.bottom) / 2}) rotate(-90)`} textAnchor="middle" className="dimension-axis">g(E)</text>
+          {panel.id === '0d' && <>
+            <line x1={x(0)} x2={x(0)} y1={y(1.02)} y2={plot.bottom} stroke={panel.color} strokeWidth={3} />
+            <path d={`M ${x(0) - 5} ${y(1.02) + 8} L ${x(0)} ${y(1.02)} L ${x(0) + 5} ${y(1.02) + 8}`} fill="none" stroke={panel.color} strokeWidth={2} />
+          </>}
+          {panel.id === '1d' && <>
+            <LinePath data={oneDimensional} x={point => x(point.x)} y={point => y(point.y)} stroke={panel.color} strokeWidth={2.7} />
+            <path d={`M ${x(0)} ${y(0.88)} L ${x(0)} ${y(1.04)}`} stroke={panel.color} strokeWidth={1.7} />
+          </>}
+          {panel.id === '2d' && <path d={`M ${x(0)} ${plot.bottom} L ${x(0)} ${y(0.72)} L ${x(1)} ${y(0.72)}`} fill="none" stroke={panel.color} strokeWidth={2.7} />}
+          {panel.id === '3d' && <LinePath data={threeDimensional} x={point => x(point.x)} y={point => y(point.y)} stroke={panel.color} strokeWidth={2.7} />}
+        </svg>
+        <p className="dimension-law" style={{ color: panel.color }}>{panel.law}</p>
+      </div>)}
+    </div>
+  </Card>;
+}
+
 export function ThermalStatisticsPanels() {
   const [electronMass, setElectronMass] = useState(1.08);
   const [holeMass, setHoleMass] = useState(0.56);
@@ -484,11 +669,13 @@ export function ThermalStatisticsPanels() {
       <Card tag="SEMICONDUCTOR INTRÍNSEC" title="Generació tèrmica de parelles"><IntrinsicCarriers /></Card>
       <Card tag="SEMICONDUCTOR INTRÍNSEC · XARXA 2D" title="Forats a la capa de valència"><ValenceHoles /></Card>
     </div>
-    <div className="grid single lower-grid"><HoleMotion /></div>
+    <div className="grid two lower-grid"><HoleMotion /><FreeElectronMotion /></div>
+    <div className="grid two lower-grid"><Recombination /><GenerationRecombination /></div>
     <div className="grid two lower-grid">
       <Card tag="DENSITAT D’ESTATS" title="N(E), Nᵥ(E) i N꜀(E)"><BandAndDos electronMass={electronMass} holeMass={holeMass} setElectronMass={setElectronMass} setHoleMass={setHoleMass} /></Card>
       <CarrierEnergyDistribution />
     </div>
+    <div className="grid single lower-grid"><DensityOfStatesDimensions /></div>
   </>;
 }
 
