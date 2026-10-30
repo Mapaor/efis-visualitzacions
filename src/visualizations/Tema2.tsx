@@ -321,13 +321,14 @@ export function DopedStatistics() {
 }
 
 export function ShockleyRegimes() {
-  const [logDonors, setLogDonors] = useState(16);
+  const [logDonors, setLogDonors] = useState(14);
   const [logNc300, setLogNc300] = useState(Math.log10(NC_300));
   const [logNv300, setLogNv300] = useState(Math.log10(NV_300));
   const [temperature, setTemperature] = useState(300);
   const donors = 10 ** logDonors;
   const nc300 = 10 ** logNc300;
   const nv300 = 10 ** logNv300;
+  const intrinsicAt = (t: number) => Math.sqrt(nc300 * nv300) * (t / 300) ** 1.5 * Math.exp(-E_G / (2 * K_B_EV * t));
   const solveState = (t: number) => {
     const kT = K_B_EV * t;
     const ncT = nc300 * (t / 300) ** 1.5;
@@ -353,6 +354,21 @@ export function ShockleyRegimes() {
   };
   const temperatures = sample(140, 45, 900);
   const transport = temperatures.map(t => ({ t, ...solveState(t) }));
+  let lowTemperature = 45;
+  let highTemperature = 900;
+  let intrinsicBoundary = 1;
+  if (intrinsicAt(highTemperature) >= donors) {
+    for (let i = 0; i < 50; i++) {
+      const midTemperature = (lowTemperature + highTemperature) / 2;
+      if (intrinsicAt(midTemperature) >= donors) highTemperature = midTemperature;
+      else lowTemperature = midTemperature;
+    }
+    intrinsicBoundary = 1000 / highTemperature;
+  }
+  const firstMostlyIonizedTemperature = transport.find(d => d.ionizedDonors / donors >= 0.9)?.t;
+  const freezeOutBoundary = firstMostlyIonizedTemperature === undefined
+    ? 24
+    : Math.max(intrinsicBoundary, Math.min(24, 1000 / firstMostlyIonizedTemperature));
   const carrierSeries: { data: { x: number; y: number }[]; color: string; width: number; dashed?: boolean }[] = [
     { data: transport.map(d => ({ x: 1000 / d.t, y: Math.log10(Math.max(d.n, 1)) })), color: C.electron, width: 2.8 },
     { data: transport.map(d => ({ x: 1000 / d.t, y: Math.log10(Math.max(d.p, 1)) })), color: C.hole, width: 3.4 },
@@ -372,19 +388,23 @@ export function ShockleyRegimes() {
       <span><i className="legend-line legend-dashed" style={{ borderColor: C.teal }} />Intrínsec n = p = nᵢ</span>
       <span><i className="legend-line legend-dashed" style={{ borderColor: C.muted }} />T seleccionada</span>
     </div>
-    <Plot xDomain={[1, 24]} yDomain={[0, 20]} xLabel="1000/T (10³ K⁻¹)" yLabel="log₁₀ concentració (cm⁻³)" xTicks={[2, 5, 10, 15, 20]} yTicks={[0, 5, 10, 15, 20]}>
+    <Plot xDomain={[1, 24]} yDomain={[12, 20]} xLabel="1000/T (10³ K⁻¹)" yLabel="log₁₀ concentració (cm⁻³)" xTicks={[2, 5, 10, 15, 20]} yTicks={[12, 14, 16, 18, 20]}>
       {({ x, y, height }) => <>
-        <rect x={x(1)} y={0} width={x(2.2) - x(1)} height={height} fill={C.hole} opacity={0.06} />
-        <rect x={x(4)} y={0} width={x(24) - x(4)} height={height} fill={C.electron} opacity={0.05} />
-        <text x={x(1.6)} y={y(19)} textAnchor="middle" className="plot-annotation">T altes · p intrínsec</text>
-        <text x={x(12)} y={y(19)} textAnchor="middle" className="plot-annotation">T baixes · n i p</text>
+        <rect x={x(1)} y={0} width={x(intrinsicBoundary) - x(1)} height={height} fill={C.teal} opacity={0.08} />
+        <rect x={x(intrinsicBoundary)} y={0} width={x(freezeOutBoundary) - x(intrinsicBoundary)} height={height} fill={C.conduction} opacity={0.07} />
+        <rect x={x(freezeOutBoundary)} y={0} width={x(24) - x(freezeOutBoundary)} height={height} fill={C.electron} opacity={0.06} />
+        {intrinsicBoundary > 1.25 && <text x={x((1 + intrinsicBoundary) / 2)} y={y(19)} textAnchor="middle" className="plot-annotation" fill={C.teal}>Intrínsec</text>}
+        {freezeOutBoundary - intrinsicBoundary > 1.1 && <text x={x((intrinsicBoundary + freezeOutBoundary) / 2)} y={y(19)} textAnchor="middle" className="plot-annotation" fill={C.conduction}>Saturació · n ≈ Nᴅ⁺</text>}
+        {freezeOutBoundary < 22.5 && <text x={x((freezeOutBoundary + 24) / 2)} y={y(19)} textAnchor="middle" className="plot-annotation" fill={C.electron}>Impureses · congelació</text>}
         {carrierSeries.map(line => <LinePath key={line.color} data={line.data} x={d => x(d.x)} y={d => y(d.y)} stroke={line.color} strokeWidth={line.width} strokeDasharray={line.dashed ? '6 4' : undefined} />)}
-        <line x1={x(1000 / temperature)} x2={x(1000 / temperature)} y1={y(0)} y2={y(20)} stroke={C.muted} strokeWidth={1.5} strokeDasharray="5 5" opacity={0.8} />
+        <line x1={x(1000 / temperature)} x2={x(1000 / temperature)} y1={y(12)} y2={y(20)} stroke={C.muted} strokeWidth={1.5} strokeDasharray="5 5" opacity={0.8} />
       </>}
     </Plot>
     <div className="metric"><span>Nivell de Fermi E_F</span><strong>{selectedState.fermiLevel.toFixed(3)} eV</strong><span>Fracció ionitzada Nᴅ⁺/Nᴅ</span><strong>{(100 * selectedState.ionizedDonors / donors).toFixed(2)} %</strong><span>Nᴅ⁺</span><strong>{selectedState.ionizedDonors.toExponential(2)} cm⁻³</strong><span>M_C(T) / M_V(T)</span><strong>{selectedState.ncT.toExponential(2)} / {selectedState.nvT.toExponential(2)} cm⁻³</strong></div>
-    <p className="insight">A temperatures baixes es veuen n i p en el règim de congelació dels dopants; a temperatures altes destaca p en el règim intrínsec. La posició a l’eix X augmenta cap a temperatures més baixes.</p>
+    <p className="insight">D’esquerra a dreta: règim intrínsec (T alta), saturació amb n ≈ Nᴅ⁺ gairebé constant i congelació d’impureses, on els portadors tornen a disminuir. L’eix X augmenta cap a temperatures més baixes.</p>
     <Equation math="M_{C,V}(T)=M_{C,V}(300)\left(\frac{T}{300}\right)^{3/2},\qquad n=p+N_D^+" />
     <Equation math="n=M_C(T)e^{-(E_C-E_F)/(kT)},\quad p=M_V(T)e^{-(E_F-E_V)/(kT)},\quad \frac{N_D^+}{N_D}=\frac{1}{1+2e^{(E_F-E_D)/(kT)}}" />
+    <Equation math="m_{\mathrm{intr}}=\frac{d\log_{10}n_i}{d(1000/T)}\simeq-\frac{E_g}{2000k_B\ln 10}\approx-2.82\ \frac{\text{dècades}}{10^3\,\mathrm{K}^{-1}}" />
+    <Equation math="n\propto e^{-(E_C-E_D)/(2k_BT)}\quad\Longrightarrow\quad m_{\mathrm{imp}}\simeq-\frac{E_C-E_D}{2000k_B\ln 10}\approx-0.11\ \frac{\text{dècades}}{10^3\,\mathrm{K}^{-1}}\quad(E_C-E_D=0.045\,\mathrm{eV})" />
   </Card>;
 }
