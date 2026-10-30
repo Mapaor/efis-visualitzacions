@@ -312,15 +312,19 @@ export function IntrinsicCarriers() {
 export function DopedStatistics() {
   const [logDonors, setLogDonors] = useState(16);
   const [logAcceptors, setLogAcceptors] = useState(15);
+  const [logNc300, setLogNc300] = useState(Math.log10(NC_300));
+  const [logNv300, setLogNv300] = useState(Math.log10(NV_300));
+  const [donorLevel, setDonorLevel] = useState(E_G - 0.045);
+  const [acceptorLevel, setAcceptorLevel] = useState(0.045);
   const [temperature, setTemperature] = useState(300);
   const donors = 10 ** logDonors;
   const acceptors = 10 ** logAcceptors;
-  const ni = intrinsicDensity(temperature);
+  const nc300 = 10 ** logNc300;
+  const nv300 = 10 ** logNv300;
   const kT = K_B_EV * temperature;
-  const ncT = NC_300 * (temperature / 300) ** 1.5;
-  const nvT = NV_300 * (temperature / 300) ** 1.5;
-  const donorLevel = E_G - 0.045;
-  const acceptorLevel = 0.045;
+  const ncT = nc300 * (temperature / 300) ** 1.5;
+  const nvT = nv300 * (temperature / 300) ** 1.5;
+  const ni = Math.sqrt(ncT * nvT) * Math.exp(-E_G / (2 * kT));
   const carriersAt = (ef: number) => {
     const n = ncT * Math.exp(Math.max(-100, Math.min(40, (ef - E_G) / kT)));
     const p = nvT * Math.exp(Math.max(-100, Math.min(40, -ef / kT)));
@@ -341,19 +345,58 @@ export function DopedStatistics() {
   const netIonizedDoping = equilibrium.ionizedDonors - equilibrium.ionizedAcceptors;
   const intrinsicLevel = E_G / 2 + kT / 2 * Math.log(nvT / ncT);
   const intrinsicDominates = equilibrium.n + equilibrium.p > 2 * Math.abs(netIonizedDoping);
-  const fermiExplanation = intrinsicDominates
-    ? `Els portadors intrínsecs ja pesen tant com el dopatge net; per això E_F s’acosta al nivell intrínsec E_i ≈ ${intrinsicLevel.toFixed(2)} eV.`
-    : netIonizedDoping > 0
-      ? `Predominen els donadors ionitzats (Nᴅ⁺ − Nₐ⁻ = ${netIonizedDoping.toExponential(2)} cm⁻³). E_F puja: així augmenta n i baixa Nᴅ⁺ fins que es compensa la càrrega.`
-      : `Predominen els acceptadors ionitzats (Nₐ⁻ − Nᴅ⁺ = ${(-netIonizedDoping).toExponential(2)} cm⁻³). E_F baixa: així augmenta p i baixa Nₐ⁻ fins que es compensa la càrrega.`;
-  const fermiSweep = sample(151, -0.2, 1.32);
+  const donorIonization = equilibrium.ionizedDonors / donors;
+  const acceptorIonization = equilibrium.ionizedAcceptors / acceptors;
+  const intrinsicOffset = fermiLevel - intrinsicLevel;
+  const carrierRatio = Math.max(equilibrium.n, equilibrium.p) / Math.max(Math.min(equilibrium.n, equilibrium.p), 1);
+  const fermiPositionText = Math.abs(intrinsicOffset) < 0.015
+    ? `E_F ≈ E_i = ${intrinsicLevel.toFixed(3)} eV`
+    : `E_F = ${fermiLevel.toFixed(3)} eV, ${Math.abs(intrinsicOffset).toFixed(3)} eV ${intrinsicOffset > 0 ? 'per sobre' : 'per sota'} d’E_i`;
+  const boltzmannValid = Math.min(fermiLevel, E_G - fermiLevel) > 3 * kT;
+  let fermiExplanation: string;
+  if (intrinsicDominates) {
+    fermiExplanation = 'Com que n i p són comparables i el dopatge net és petit, pren n ≈ p ≈ n_i i E_F ≈ E_i.';
+  } else if (netIonizedDoping > 0) {
+    const ionizationApproximation = donorIonization >= 0.9
+      ? `E_F−E_D = ${(fermiLevel - donorLevel).toFixed(3)} eV i Nᴅ⁺/Nᴅ = ${(100 * donorIonization).toFixed(1)}%: aproxima Nᴅ⁺ ≈ Nᴅ.`
+      : `Només el ${(100 * donorIonization).toFixed(1)}% dels donadors està ionitzat: conserva Nᴅ⁺ = Nᴅ/[1+2e^{(E_F−E_D)/kT}].`;
+    const carrierApproximation = carrierRatio >= 10 && boltzmannValid
+      ? `Com que n/p = ${carrierRatio.toFixed(1)}, n domina: usa n ≈ Nᴅ⁺ − Nₐ⁻ i p ≈ n_i²/n.`
+      : carrierRatio >= 10
+        ? `Com que n/p = ${carrierRatio.toFixed(1)}, n domina: usa n ≈ Nᴅ⁺ − Nₐ⁻, però calcula p amb Fermi-Dirac.`
+      : `n/p = ${carrierRatio.toFixed(1)}: p encara no és negligible; conserva n + Nₐ⁻ = p + Nᴅ⁺.`;
+    fermiExplanation = `${ionizationApproximation} ${carrierApproximation}`;
+  } else {
+    const ionizationApproximation = acceptorIonization >= 0.9
+      ? `E_A−E_F = ${(acceptorLevel - fermiLevel).toFixed(3)} eV i Nₐ⁻/Nₐ = ${(100 * acceptorIonization).toFixed(1)}%: aproxima Nₐ⁻ ≈ Nₐ.`
+      : `Només el ${(100 * acceptorIonization).toFixed(1)}% dels acceptadors està ionitzat: conserva Nₐ⁻ = Nₐ/[1+2e^{(E_A−E_F)/kT}].`;
+    const carrierApproximation = carrierRatio >= 10 && boltzmannValid
+      ? `Com que p/n = ${carrierRatio.toFixed(1)}, p domina: usa p ≈ Nₐ⁻ − Nᴅ⁺ i n ≈ n_i²/p.`
+      : carrierRatio >= 10
+        ? `Com que p/n = ${carrierRatio.toFixed(1)}, p domina: usa p ≈ Nₐ⁻ − Nᴅ⁺, però calcula n amb Fermi-Dirac.`
+      : `p/n = ${carrierRatio.toFixed(1)}: n encara no és negligible; conserva n + Nₐ⁻ = p + Nᴅ⁺.`;
+    fermiExplanation = `${ionizationApproximation} ${carrierApproximation}`;
+  }
+  const statisticsNote = boltzmannValid
+    ? `E_F és a més de 3kT de les bandes; l’aproximació de Boltzmann i n·p ≈ n_i² són adequades.`
+    : `E_F és a menys de 3kT d’una banda: caldria deixar Boltzmann i usar estadística de Fermi-Dirac.`;
+  const fermiSweep = sample(151, 0, E_G);
   const carrierCurves = fermiSweep.map(ef => ({ x: ef, ...carriersAt(ef) }));
   return <>
-    <div className="controls three-controls">
+    <div className="controls two-controls">
       <Range label="Donadors Nᴅ" value={logDonors} min={12} max={19} step={0.1} onChange={setLogDonors} formatValue={() => `${donors.toExponential(1)} cm⁻³`} />
       <Range label="Acceptadors Nₐ" value={logAcceptors} min={12} max={19} step={0.1} onChange={setLogAcceptors} formatValue={() => `${acceptors.toExponential(1)} cm⁻³`} />
-      <Range label="Temperatura" value={temperature} min={200} max={700} step={10} onChange={setTemperature} formatValue={v => `${v} K`} />
     </div>
+    <div className="controls two-controls">
+      <Range label={<><i>M</i><sub>C</sub>(300 K) = n(E<sub>C</sub>)</>} value={logNc300} min={18} max={21} step={0.01} onChange={setLogNc300} formatValue={() => `${nc300.toExponential(2)} cm⁻³`} />
+      <Range label={<><i>M</i><sub>V</sub>(300 K) = p(E<sub>V</sub>)</>} value={logNv300} min={18} max={21} step={0.01} onChange={setLogNv300} formatValue={() => `${nv300.toExponential(2)} cm⁻³`} />
+    </div>
+    <div className="controls two-controls">
+      <Range label={<><i>E</i><sub>D</sub></>} value={donorLevel} min={E_G - 0.15} max={E_G - 0.01} step={0.001} onChange={setDonorLevel} formatValue={v => `${format(v, 3)} eV`} />
+      <Range label={<><i>E</i><sub>A</sub></>} value={acceptorLevel} min={0.01} max={0.15} step={0.001} onChange={setAcceptorLevel} formatValue={v => `${format(v, 3)} eV`} />
+    </div>
+    <Range label="Temperatura" value={temperature} min={200} max={700} step={10} onChange={setTemperature} formatValue={v => `${v} K`} />
+    <p className="plot-caption">M<sub>C</sub> fixa el valor de n quan E<sub>F</sub> = E<sub>C</sub>; M<sub>V</sub> fixa p quan E<sub>F</sub> = E<sub>V</sub>. Tots dos valors varien amb la temperatura com T<sup>3/2</sup>.</p>
     <div className="chart-legend" aria-label="Llegenda de concentracions segons el nivell de Fermi">
       <span><i className="legend-line" style={{ borderColor: C.electron }} />Electrons n</span>
       <span><i className="legend-line" style={{ borderColor: C.hole }} />Forats p</span>
@@ -362,22 +405,30 @@ export function DopedStatistics() {
       <span><i className="legend-line legend-dashed" style={{ borderColor: C.muted }} />Intrínseca nᵢ</span>
       <span><i className="legend-line legend-dashed" style={{ borderColor: C.muted }} />Nivell intrínsec Eᵢ</span>
     </div>
-    <Plot xDomain={[-0.2, 1.32]} yDomain={[0, 20]} xLabel="Nivell de Fermi E_F (eV)" yLabel="log₁₀ concentració (cm⁻³)" xTicks={[0, E_G / 2, E_G]} yTicks={[0, 5, 10, 15, 20]}>
+    <Plot xDomain={[0, E_G]} yDomain={[0, 23]} xLabel="Nivell de Fermi E_F: E_V → E_C (eV)" yLabel="log₁₀ concentració (cm⁻³)" xTicks={[0, intrinsicLevel, E_G]} xFormat={value => value === 0 ? 'E_V' : Math.abs(value - intrinsicLevel) < 0.01 ? 'E_i' : 'E_C'} yTicks={[0, 5, 10, 15, 20, 22]}>
         {({ x, y }) => <>
+          <rect x={x(0)} y={y(23)} width={x(E_G) - x(0)} height={y(0) - y(23)} fill={C.gap} opacity={0.42} />
           {[
             { key: 'n', color: C.electron }, { key: 'p', color: C.hole },
             { key: 'ionizedDonors', color: C.conduction }, { key: 'ionizedAcceptors', color: C.purple },
           ].map(line => <LinePath key={line.key} data={carrierCurves.map(d => ({ x: d.x, y: Math.log10(Math.max(d[line.key as keyof typeof d] as number, 1)) }))} x={d => x(d.x)} y={d => y(d.y)} stroke={line.color} strokeWidth={2.8} />)}
-          <line x1={x(-0.2)} x2={x(1.32)} y1={y(Math.log10(Math.max(ni, 1)))} y2={y(Math.log10(Math.max(ni, 1)))} stroke={C.muted} strokeWidth={1.1} strokeDasharray="4 5" opacity={0.55} />
-          <text x={x(1.29)} y={y(Math.log10(Math.max(ni, 1))) - 7} textAnchor="end" className="plot-annotation" fill={C.muted}>nᵢ</text>
-          <line x1={x(intrinsicLevel)} x2={x(intrinsicLevel)} y1={y(0)} y2={y(20)} stroke={C.muted} strokeWidth={1.1} strokeDasharray="4 5" opacity={0.55} />
-          <text x={x(intrinsicLevel) + 5} y={y(2)} className="plot-annotation" fill={C.muted}>Eᵢ</text>
-          <line x1={x(fermiLevel)} x2={x(fermiLevel)} y1={y(0)} y2={y(20)} stroke={C.fermi} strokeWidth={2} strokeDasharray="6 3" opacity={0.9} />
-          <text x={x(fermiLevel) + 6} y={y(18)} className="plot-annotation" fill={C.fermi}>E_F neutre</text>
+          <line x1={x(0)} x2={x(E_G)} y1={y(Math.log10(Math.max(ni, 1)))} y2={y(Math.log10(Math.max(ni, 1)))} stroke={C.muted} strokeWidth={1.1} strokeDasharray="4 5" opacity={0.55} />
+          <text x={x(E_G) - 5} y={y(Math.log10(Math.max(ni, 1))) - 7} textAnchor="end" className="plot-annotation" fill={C.muted}>nᵢ</text>
+          <line x1={x(intrinsicLevel)} x2={x(intrinsicLevel)} y1={y(0)} y2={y(23)} stroke={C.muted} strokeWidth={1.1} strokeDasharray="4 5" opacity={0.55} />
+          <line x1={x(fermiLevel)} x2={x(fermiLevel)} y1={y(0)} y2={y(23)} stroke={C.fermi} strokeWidth={2} strokeDasharray="6 3" opacity={0.9} />
+          <text x={x(fermiLevel) + 6} y={y(22)} className="plot-annotation" fill={C.fermi}>E_F neutre</text>
+          <line x1={x(donorLevel - kT * Math.log(2))} x2={x(donorLevel - kT * Math.log(2))} y1={y(0)} y2={y(23)} stroke={C.conduction} strokeWidth={1.1} strokeDasharray="4 4" opacity={0.8} />
+          <text x={x(donorLevel - kT * Math.log(2)) - 5} y={y(21)} textAnchor="end" className="plot-annotation" fill={C.conduction}>E_D</text>
+          <line x1={x(acceptorLevel + kT * Math.log(2))} x2={x(acceptorLevel + kT * Math.log(2))} y1={y(0)} y2={y(23)} stroke={C.purple} strokeWidth={1.1} strokeDasharray="4 4" opacity={0.8} />
+          <text x={x(acceptorLevel + kT * Math.log(2)) + 5} y={y(21)} className="plot-annotation" fill={C.purple}>E_A</text>
+          <circle cx={x(E_G)} cy={y(Math.log10(ncT))} r={4} fill={C.electron} stroke="white" strokeWidth={1.5} />
+          <text x={x(E_G) - 7} y={y(Math.log10(ncT)) - 7} textAnchor="end" className="plot-annotation" fill={C.electron}>M_C(T)</text>
+          <circle cx={x(0)} cy={y(Math.log10(nvT))} r={4} fill={C.hole} stroke="white" strokeWidth={1.5} />
+          <text x={x(0) + 7} y={y(Math.log10(nvT)) - 7} className="plot-annotation" fill={C.hole}>M_V(T)</text>
         </>}
     </Plot>
     <div className="metric"><span>n</span><strong>{equilibrium.n.toExponential(2)} cm⁻³</strong><span>p</span><strong>{equilibrium.p.toExponential(2)} cm⁻³</strong><span>Nᴅ⁺</span><strong>{equilibrium.ionizedDonors.toExponential(2)} cm⁻³</strong><span>Nₐ⁻</span><strong>{equilibrium.ionizedAcceptors.toExponential(2)} cm⁻³</strong></div>
-    <div className="insight"><strong>Balanç a E_F = {fermiLevel.toFixed(3)} eV:</strong> n ({equilibrium.n.toExponential(2)}) + Nₐ⁻ ({equilibrium.ionizedAcceptors.toExponential(2)}) = p ({equilibrium.p.toExponential(2)}) + Nᴅ⁺ ({equilibrium.ionizedDonors.toExponential(2)}) cm⁻³. {fermiExplanation}</div>
+    <div className="insight"><strong>Balanç:</strong> n ({equilibrium.n.toExponential(2)}) + Nₐ⁻ ({equilibrium.ionizedAcceptors.toExponential(2)}) = p ({equilibrium.p.toExponential(2)}) + Nᴅ⁺ ({equilibrium.ionizedDonors.toExponential(2)}) cm⁻³.<br /><strong>Lectura d’E_F:</strong> {fermiPositionText}.<br /><strong>Per continuar analíticament:</strong> {fermiExplanation} {statisticsNote}</div>
     <Equation math="E_F=E_{Fi}+kT\ln\!\left(\frac{n}{n_i}\right)=E_{Fi}-kT\ln\!\left(\frac{p}{n_i}\right),\qquad E_{Fi}=\frac{E_C+E_V}{2}+\frac{kT}{2}\ln\!\frac{M_V}{M_C}" />
     <Equation math="n+N_A^-=p+N_D^+" />
     <Equation math="n=M_Ce^{-(E_C-E_F)/(kT)},\qquad p=M_Ve^{-(E_F-E_V)/(kT)}" />
