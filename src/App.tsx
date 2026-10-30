@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Card } from './components/Card';
-import { BandAndDos, DopedStatistics, ExtrinsicDos, FermiDistribution, FermiTemperatureShift, IntrinsicCarriers, ShockleyRegimes, ThermalDos } from './visualizations/Tema2';
+import { DopedStatistics, ExtrinsicDos, FermiDistribution, FermiTemperatureShift, ShockleyRegimes, ThermalDos, ThermalStatisticsPanels } from './visualizations/Tema2';
 import { BandFormation, EffectiveMass, PotentialAndOrbitals } from './visualizations/Tema1';
 import { TransportEquilibrium } from './visualizations/Tema3';
 import { MinorityCarriers } from './visualizations/Tema4';
@@ -60,10 +60,7 @@ export default function App() {
           <ShockleyRegimes />
           <Card tag="NEUTRALITAT ELÈCTRICA · PORTADORS I DOPANTS IONITZATS" title="Diagrama de Shockley: concentracions en funció d’E_F"><DopedStatistics /></Card>
         </div>
-        <div className="grid two lower-grid">
-          <Card tag="SEMICONDUCTOR INTRÍNSEC" title="Generació tèrmica de parelles"><IntrinsicCarriers /></Card>
-          <Card tag="DENSITAT D’ESTATS" title="N(E), Nᵥ(E) i N꜀(E)"><BandAndDos /></Card>
-        </div>
+        <ThermalStatisticsPanels />
         <div className="grid single lower-grid"><FermiDistribution /></div>
         <div className="grid single lower-grid"><ThermalDos /></div>
         <div className="grid single lower-grid"><ExtrinsicDos /></div>

@@ -24,6 +24,12 @@ function fermiOccupation(energy: number, temperature: number, fermiLevel: number
   return 1 / (1 + Math.exp(exponent));
 }
 
+function fermiVacancy(energy: number, temperature: number, fermiLevel: number) {
+  if (temperature <= 0) return energy < fermiLevel ? 0 : energy > fermiLevel ? 1 : 0.5;
+  const exponent = Math.max(-60, Math.min(60, (fermiLevel - energy) / (K_B_EV * temperature)));
+  return 1 / (1 + Math.exp(exponent));
+}
+
 function integrateArea(points: DosPoint[]) {
   return points.slice(1).reduce((sum, point, index) => {
     const previous = points[index];
@@ -31,10 +37,13 @@ function integrateArea(points: DosPoint[]) {
   }, 0);
 }
 
-export function BandAndDos() {
+export function BandAndDos({ electronMass, holeMass, setElectronMass, setHoleMass }: {
+  electronMass: number;
+  holeMass: number;
+  setElectronMass: (value: number) => void;
+  setHoleMass: (value: number) => void;
+}) {
   const energies = sample(80, 0, 1);
-  const [electronMass, setElectronMass] = useState(1.08);
-  const [holeMass, setHoleMass] = useState(0.56);
   const electronScale = electronMass ** 1.5;
   const holeScale = holeMass ** 1.5;
   const conduction = energies.map(z => ({ x: electronScale * Math.sqrt(z), y: E_G + 0.65 * z }));
@@ -96,11 +105,11 @@ export function ThermalDos() {
     y: point.y,
   }));
   const valenceElectrons = valenceStates.map(point => ({
-    x: point.x * (1 - carrierFraction(1 - fermiOccupation(point.y, temperature, fermiLevel))),
+    x: point.x * (1 - carrierFraction(fermiVacancy(point.y, temperature, fermiLevel))),
     y: point.y,
   }));
   const valenceHoles = valenceStates.map(point => ({
-    x: point.x * carrierFraction(1 - fermiOccupation(point.y, temperature, fermiLevel)),
+    x: point.x * carrierFraction(fermiVacancy(point.y, temperature, fermiLevel)),
     y: point.y,
   }));
   const distribution = sample(300, -0.72, 1.82).map(energy => ({
@@ -165,11 +174,11 @@ export function ExtrinsicDos() {
     y: point.y,
   }));
   const valenceElectrons = valenceStates.map(point => ({
-    x: point.x * (1 - carrierFraction(1 - fermiOccupation(point.y, temperature, fermiLevel))),
+    x: point.x * (1 - carrierFraction(fermiVacancy(point.y, temperature, fermiLevel))),
     y: point.y,
   }));
   const valenceHoles = valenceStates.map(point => ({
-    x: point.x * carrierFraction(1 - fermiOccupation(point.y, temperature, fermiLevel)),
+    x: point.x * carrierFraction(fermiVacancy(point.y, temperature, fermiLevel)),
     y: point.y,
   }));
   const distribution = sample(300, -0.72, 1.82).map(energy => {
@@ -289,7 +298,7 @@ export function FermiTemperatureShift() {
 
 export function IntrinsicCarriers() {
   const [temperature, setTemperature] = useState(300);
-  const count = Math.round(3 + 13 * (intrinsicDensity(temperature) / intrinsicDensity(700)) ** 0.35);
+  const count = Math.round(16 * (intrinsicDensity(temperature) / intrinsicDensity(700)) ** 0.35);
   const dots = Array.from({ length: count }, (_, i) => ({ x: 0.1 + (i * 0.61803398875 % 0.8), e: E_G + 0.08 + (i * 0.317 % 0.36), h: -0.06 - (i * 0.229 % 0.36) }));
   return <>
     <Range label="Temperatura" value={temperature} min={50} max={700} step={10} onChange={setTemperature} formatValue={v => `${v} K`} />
@@ -306,6 +315,180 @@ export function IntrinsicCarriers() {
     </Plot>
     <div className="metric"><span>Concentració intrínseca</span><strong>{intrinsicDensity(temperature).toExponential(2)} cm⁻³</strong><span>En material intrínsec: n = p = nᵢ</span></div>
     <Equation math="n=p=n_i,\qquad n_i^2=M_CM_Ve^{-E_g/(kT)}" />
+  </>;
+}
+
+function ValenceHoles() {
+  const [temperature, setTemperature] = useState(300);
+  const generatedPairs = Math.min(8, Math.round(8 * (intrinsicDensity(temperature) / intrinsicDensity(700)) ** 0.25));
+  const atoms = Array.from({ length: 9 }, (_, index) => ({ index, col: index % 3, row: Math.floor(index / 3), x: 100 + (index % 3) * 200, y: 62 + Math.floor(index / 3) * 100 }));
+  const directions = [{ x: 0, y: -25 }, { x: 25, y: 0 }, { x: 0, y: 25 }, { x: -25, y: 0 }];
+  const holeAtomOrder = [4, 0, 8, 2, 6, 1, 7, 3, 5];
+  const holes = new Set(holeAtomOrder.slice(0, generatedPairs).map((atomIndex, pairIndex) => atomIndex * 4 + (atomIndex + pairIndex) % 4));
+  const freeElectronPositions = [
+    { x: 61, y: 112 }, { x: 232, y: 35 }, { x: 388, y: 97 }, { x: 548, y: 153 },
+    { x: 207, y: 220 }, { x: 386, y: 293 }, { x: 65, y: 284 }, { x: 548, y: 42 },
+  ];
+  return <>
+    <Range label="Temperatura" value={temperature} min={50} max={700} step={10} onChange={setTemperature} formatValue={v => `${v} K`} />
+    <p className="plot-caption">Xarxa de 9 àtoms de Si, amb 4 electrons de valència per àtom · T = {temperature} K · {generatedPairs} parelles electró-forat. En cada parella, un electró deixa un enllaç i queda un forat a la capa de valència.</p>
+    <svg className="plot-svg" viewBox="0 0 600 340" role="img" aria-label={`Xarxa de nou àtoms de silici a ${temperature} kelvin, amb ${generatedPairs} forats i electrons lliures`}>
+      <g stroke="#cbd4df" strokeWidth="2">
+        {atoms.filter(atom => atom.col < 2).map(atom => <line key={`h-${atom.index}`} x1={atom.x} y1={atom.y} x2={atom.x + 200} y2={atom.y} />)}
+        {atoms.filter(atom => atom.row < 2).map(atom => <line key={`v-${atom.index}`} x1={atom.x} y1={atom.y} x2={atom.x} y2={atom.y + 100} />)}
+      </g>
+      {atoms.map(atom => <g key={`atom-${atom.index}`}>
+        <circle cx={atom.x} cy={atom.y} r={17} fill="#f6f8fb" stroke="#738398" strokeWidth={1.5} />
+        <text x={atom.x} y={atom.y + 4} textAnchor="middle" className="plot-annotation">Si</text>
+        {directions.map((direction, directionIndex) => {
+          const slot = atom.index * 4 + directionIndex;
+          return holes.has(slot)
+            ? <circle key={slot} cx={atom.x + direction.x} cy={atom.y + direction.y} r={5} fill="white" stroke={C.hole} strokeWidth={2} />
+            : <circle key={slot} cx={atom.x + direction.x} cy={atom.y + direction.y} r={4.5} fill={C.valence} stroke="white" strokeWidth={1} />;
+        })}
+      </g>)}
+      {freeElectronPositions.slice(0, generatedPairs).map((point, index) => <g key={`free-${index}`}>
+        <circle cx={point.x} cy={point.y} r={6} fill={C.electron} stroke="white" strokeWidth={1.5} />
+        <text x={point.x + 8} y={point.y + 4} className="plot-annotation" fill={C.electron}>e⁻</text>
+      </g>)}
+    </svg>
+    <div className="chart-legend" aria-label="Llegenda dels electrons i forats">
+      <span><i className="legend-area" style={{ background: C.valence }} />Electró enllaçat</span>
+      <span><i className="legend-area" style={{ background: 'white', border: `2px solid ${C.hole}` }} />Forat a l’enllaç</span>
+      <span><i className="legend-area" style={{ background: C.electron }} />Electró lliure</span>
+    </div>
+  </>;
+}
+
+const holeMotionPath = [
+  { atom: 0, direction: 1 }, { atom: 1, direction: 3 },
+  { atom: 1, direction: 2 }, { atom: 4, direction: 0 },
+  { atom: 4, direction: 3 }, { atom: 3, direction: 1 },
+  { atom: 3, direction: 2 }, { atom: 6, direction: 0 },
+  { atom: 6, direction: 1 }, { atom: 7, direction: 3 },
+  { atom: 7, direction: 0 }, { atom: 4, direction: 2 },
+  { atom: 4, direction: 1 }, { atom: 5, direction: 3 },
+  { atom: 5, direction: 2 }, { atom: 8, direction: 0 },
+  { atom: 8, direction: 1 }, { atom: 8, direction: 3 },
+  { atom: 7, direction: 1 }, { atom: 7, direction: 0 },
+  { atom: 4, direction: 2 }, { atom: 4, direction: 0 },
+  { atom: 1, direction: 2 }, { atom: 1, direction: 3 },
+  { atom: 0, direction: 1 }, { atom: 0, direction: 2 },
+];
+
+function HoleMotion() {
+  const [step, setStep] = useState(0);
+  const atoms = Array.from({ length: 9 }, (_, index) => ({ index, col: index % 3, row: Math.floor(index / 3), x: 100 + (index % 3) * 200, y: 62 + Math.floor(index / 3) * 100 }));
+  const directions = [{ x: 0, y: -25 }, { x: 25, y: 0 }, { x: 0, y: 25 }, { x: -25, y: 0 }];
+  const slotPoint = (slot: { atom: number; direction: number }) => {
+    const atom = atoms[slot.atom];
+    const direction = directions[slot.direction];
+    return { x: atom.x + direction.x, y: atom.y + direction.y };
+  };
+  const hole = holeMotionPath[step];
+  const electron = holeMotionPath[step + 1];
+  const holePoint = slotPoint(hole);
+  const electronPoint = electron ? slotPoint(electron) : null;
+  const sameAtom = electron !== undefined && hole.atom === electron.atom;
+  const arrowPath = electronPoint && (sameAtom
+    ? `M ${electronPoint.x} ${electronPoint.y} Q ${atoms[hole.atom].x} ${atoms[hole.atom].y - 36} ${holePoint.x} ${holePoint.y}`
+    : `M ${electronPoint.x} ${electronPoint.y} L ${holePoint.x} ${holePoint.y}`);
+
+  return <Card tag="TRANSPORT DE FORATS · MODEL ESQUEMÀTIC" title="Moviment dels forats a la xarxa de silici">
+    <p className="plot-caption">Un electró d’un enllaç veí salta per omplir el forat. El forat queda a l’enllaç que l’electró ha deixat, així que sembla que es desplaça en sentit contrari.</p>
+    <Range label="Temps" value={step} min={0} max={holeMotionPath.length - 1} step={1} onChange={setStep} formatValue={value => `pas ${value + 1} / ${holeMotionPath.length}`} />
+    <svg className="plot-svg" viewBox="0 0 600 340" role="img" aria-label={`Xarxa de silici amb un forat a l'enllaç ${step + 1} de ${holeMotionPath.length}`}>
+      <defs>
+        <marker id="hole-motion-arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto" markerUnits="strokeWidth">
+          <path d="M0,0 L8,4 L0,8 z" fill={C.electron} />
+        </marker>
+      </defs>
+      <g stroke="#cbd4df" strokeWidth="2">
+        {atoms.filter(atom => atom.col < 2).map(atom => <line key={`h-${atom.index}`} x1={atom.x} y1={atom.y} x2={atom.x + 200} y2={atom.y} />)}
+        {atoms.filter(atom => atom.row < 2).map(atom => <line key={`v-${atom.index}`} x1={atom.x} y1={atom.y} x2={atom.x} y2={atom.y + 100} />)}
+      </g>
+      {arrowPath && <path d={arrowPath} fill="none" stroke={C.electron} strokeWidth={2} strokeDasharray="5 4" markerEnd="url(#hole-motion-arrow)" />}
+      {atoms.map(atom => <g key={`atom-${atom.index}`}>
+        <circle cx={atom.x} cy={atom.y} r={17} fill="#f6f8fb" stroke="#738398" strokeWidth={1.5} />
+        <text x={atom.x} y={atom.y + 4} textAnchor="middle" className="plot-annotation">Si</text>
+        {directions.map((direction, directionIndex) => {
+          const isHole = hole.atom === atom.index && hole.direction === directionIndex;
+          const isIncoming = electron !== undefined && electron.atom === atom.index && electron.direction === directionIndex;
+          const cx = atom.x + direction.x;
+          const cy = atom.y + direction.y;
+          return isHole
+            ? <g key={`${atom.index}-${directionIndex}`}><circle cx={cx} cy={cy} r={8} fill="white" stroke={C.hole} strokeWidth={2.5} /><text x={cx + 10} y={cy + 4} className="plot-annotation" fill={C.hole}>h⁺</text></g>
+            : <g key={`${atom.index}-${directionIndex}`}><circle cx={cx} cy={cy} r={isIncoming ? 6 : 4.5} fill={isIncoming ? C.electron : C.valence} stroke="white" strokeWidth={1} />{isIncoming && <text x={cx + 9} y={cy - 7} className="plot-annotation" fill={C.electron}>e⁻</text>}</g>;
+        })}
+      </g>)}
+    </svg>
+    <div className="chart-legend" aria-label="Llegenda del moviment del forat">
+      <span><i className="legend-area" style={{ background: C.valence }} />Electrons enllaçats</span>
+      <span><i className="legend-area" style={{ background: 'white', border: `2px solid ${C.hole}` }} />Forat</span>
+      <span><i className="legend-area" style={{ background: C.electron }} />Electró que salta</span>
+    </div>
+  </Card>;
+}
+
+function CarrierEnergyDistribution() {
+  const [temperature, setTemperature] = useState(700);
+  const ncT = NC_300 * (temperature / 300) ** 1.5;
+  const nvT = NV_300 * (temperature / 300) ** 1.5;
+  const intrinsic = Math.sqrt(ncT * nvT) * Math.exp(-E_G / (2 * K_B_EV * temperature));
+  const energies = sample(240, 0, 1);
+  const rawElectrons = energies.map(z => {
+    const energy = E_G + 0.65 * z;
+    const tail = Math.exp(-2.6 * z) * (1 - z) ** 2;
+    return { x: tail, y: energy };
+  });
+  const rawHoles = energies.map(z => {
+    const energy = -0.65 * z;
+    const tail = Math.exp(-2.6 * z) * (1 - z) ** 2;
+    return { x: tail, y: energy };
+  });
+  const electronArea = integrateArea(rawElectrons);
+  const holeArea = integrateArea(rawHoles);
+  const electrons = rawElectrons.map(point => ({ ...point, x: point.x * intrinsic / electronArea }));
+  const holes = rawHoles.map(point => ({ ...point, x: point.x * intrinsic / holeArea }));
+  const referenceNc = NC_300 * (700 / 300) ** 1.5;
+  const referenceNv = NV_300 * (700 / 300) ** 1.5;
+  const referenceIntrinsic = Math.sqrt(referenceNc * referenceNv) * Math.exp(-E_G / (2 * K_B_EV * 700));
+  const maxDensity = referenceIntrinsic / electronArea * 1.15;
+  return <Card tag="DISTRIBUCIÓ ESPECTRAL DE PORTADORS" title="Energia E en funció de n(E) i p(E)">
+    <Range label="Temperatura" value={temperature} min={50} max={700} step={10} onChange={setTemperature} formatValue={value => `${value} K`} />
+    <p className="plot-caption">Esquema pedagògic a T = {temperature} K · cada perfil comença ample prop de la banda i s’afina fins a reposar a zero; l’àrea de cada color representa el total de portadors (n = p = nᵢ).</p>
+    <div className="chart-legend" aria-label="Llegenda de portadors segons l’energia">
+      <span><i className="legend-area" style={{ background: C.electron }} />Electrons n(E)</span>
+      <span><i className="legend-area" style={{ background: C.hole }} />Forats p(E)</span>
+    </div>
+    <Plot xDomain={[0, maxDensity]} yDomain={[-0.72, 1.82]} xLabel="Densitat espectral n(E) | p(E) (cm⁻³ eV⁻¹)" yLabel="Energia E (eV)" xTicks={[0, maxDensity / 2, maxDensity]} xFormat={value => value === 0 ? '0' : value.toExponential(1)} yTicks={[0, E_G]}>
+      {({ x, y }) => <>
+        <rect x={x(0)} y={y(E_G)} width={x(maxDensity) - x(0)} height={y(0) - y(E_G)} fill={C.gap} />
+        <path d={areaPath(electrons, E_G, x, y)} fill={C.electron} opacity={0.65} />
+        <path d={areaPath(holes, 0, x, y)} fill={C.hole} opacity={0.65} />
+        <LinePath data={electrons} x={d => x(d.x)} y={d => y(d.y)} stroke={C.electron} strokeWidth={2.5} />
+        <LinePath data={holes} x={d => x(d.x)} y={d => y(d.y)} stroke={C.hole} strokeWidth={2.5} />
+        <text x={x(electrons[0].x * 0.08)} y={y(E_G + 0.16)} className="plot-annotation" fill={C.electron}>n(E)</text>
+        <text x={x(holes[0].x * 0.08)} y={y(-0.16)} className="plot-annotation" fill={C.hole}>p(E)</text>
+      </>}
+    </Plot>
+    <div className="metric"><span>Total electrons n</span><strong>{intrinsic.toExponential(2)} cm⁻³</strong><span>Total forats p</span><strong>{intrinsic.toExponential(2)} cm⁻³</strong></div>
+  </Card>;
+}
+
+export function ThermalStatisticsPanels() {
+  const [electronMass, setElectronMass] = useState(1.08);
+  const [holeMass, setHoleMass] = useState(0.56);
+  return <>
+    <div className="grid two lower-grid">
+      <Card tag="SEMICONDUCTOR INTRÍNSEC" title="Generació tèrmica de parelles"><IntrinsicCarriers /></Card>
+      <Card tag="SEMICONDUCTOR INTRÍNSEC · XARXA 2D" title="Forats a la capa de valència"><ValenceHoles /></Card>
+    </div>
+    <div className="grid single lower-grid"><HoleMotion /></div>
+    <div className="grid two lower-grid">
+      <Card tag="DENSITAT D’ESTATS" title="N(E), Nᵥ(E) i N꜀(E)"><BandAndDos electronMass={electronMass} holeMass={holeMass} setElectronMass={setElectronMass} setHoleMass={setHoleMass} /></Card>
+      <CarrierEnergyDistribution />
+    </div>
   </>;
 }
 
