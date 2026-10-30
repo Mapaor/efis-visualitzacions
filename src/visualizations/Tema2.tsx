@@ -143,6 +143,85 @@ export function ThermalDos() {
   </Card>;
 }
 
+export function ExtrinsicDos() {
+  const [dopingPosition, setDopingPosition] = useState(0);
+  const temperature = 900;
+  const kT = K_B_EV * temperature;
+  const referenceDos300 = Math.sqrt(NC_300 * NV_300);
+  const intrinsic = referenceDos300 * (temperature / 300) ** 1.5 * Math.exp(-E_G / (2 * kT));
+  const netDoping = dopingPosition / 100 * 1e19;
+  const dopantConcentration = Math.abs(netDoping);
+  const majority = (Math.abs(netDoping) + Math.sqrt(netDoping ** 2 + 4 * intrinsic ** 2)) / 2;
+  const electrons = netDoping >= 0 ? majority : intrinsic ** 2 / majority;
+  const holes = netDoping <= 0 ? majority : intrinsic ** 2 / majority;
+  const fermiLevel = E_G / 2 + kT * Math.log(electrons / intrinsic);
+  const bandSamples = sample(500, 0, 1);
+  const conductionStates = bandSamples.map(z => ({ x: Math.sqrt(z), y: E_G + 0.65 * z }));
+  const valenceStates = bandSamples.map(z => ({ x: Math.sqrt(z), y: -0.65 * z }));
+  const visualCarrierGain = 16;
+  const carrierFraction = (probability: number) => Math.min(0.65, visualCarrierGain * probability);
+  const conductionElectrons = conductionStates.map(point => ({
+    x: point.x * carrierFraction(fermiOccupation(point.y, temperature, fermiLevel)),
+    y: point.y,
+  }));
+  const valenceElectrons = valenceStates.map(point => ({
+    x: point.x * (1 - carrierFraction(1 - fermiOccupation(point.y, temperature, fermiLevel))),
+    y: point.y,
+  }));
+  const valenceHoles = valenceStates.map(point => ({
+    x: point.x * carrierFraction(1 - fermiOccupation(point.y, temperature, fermiLevel)),
+    y: point.y,
+  }));
+  const distribution = sample(300, -0.72, 1.82).map(energy => {
+    const occupation = fermiOccupation(energy, temperature, fermiLevel);
+    return { energy, occupation, vacancy: 1 - occupation };
+  });
+  const semiconductorType = dopingPosition === 0
+    ? 'n = p'
+    : dopingPosition < 0 ? 'Predomini d’electrons · tipus n' : 'Predomini de forats · tipus p';
+  const dopingLabel = dopingPosition === 0
+    ? 'Dopatge net nul'
+    : `${dopingPosition < 0 ? 'Nᴅ' : 'Nₐ'} = ${dopantConcentration.toExponential(1)} cm⁻³`;
+
+  return <Card tag="SEMICONDUCTOR EXTRÍNSEC · T = 900 K" title="Dopatge, portadors i nivell de Fermi">
+    <Range label="Dopatge · tipus n ← intrínsec → tipus p" value={dopingPosition} min={-100} max={100} step={1} onChange={setDopingPosition} formatValue={() => dopingLabel} />
+    <div className="insight"><strong>{semiconductorType}</strong> · n = {electrons.toExponential(2)} cm⁻³, p = {holes.toExponential(2)} cm⁻³. E<sub>F</sub> = {fermiLevel.toFixed(3)} eV.</div>
+    <div className="chart-legend" aria-label="Llegenda de densitats d’estats i portadors">
+      <span><i className="legend-area" style={{ background: C.conduction }} />Estats totals · BC</span>
+      <span><i className="legend-area" style={{ background: C.valence }} />Estats totals · BV</span>
+      <span><i className="legend-area" style={{ background: C.electron }} />Electrons n</span>
+      <span><i className="legend-area" style={{ background: C.hole }} />Forats p</span>
+      <span><i className="legend-line" style={{ borderColor: C.fermi }} />f(E)</span>
+      <span><i className="legend-line" style={{ borderColor: C.hole }} />1 − f(E)</span>
+    </div>
+    <div className="plot-pair">
+      <Plot xDomain={[0, 1.5]} yDomain={[-0.72, 1.82]} xLabel="Densitat d’estats N(E) · relativa" yLabel="Energia E (eV)" xTicks={[0, 0.5, 1, 1.5]} yTicks={[0, E_G]}>
+        {({ x, y }) => <>
+          <rect x={x(0)} y={y(E_G)} width={x(1.5) - x(0)} height={y(0) - y(E_G)} fill={C.gap} />
+          <path d={areaPath(conductionStates, E_G, x, y)} fill={C.conduction} opacity={0.18} />
+          <path d={areaPath(valenceStates, 0, x, y)} fill={C.valence} opacity={0.18} />
+          <path d={areaPath(conductionElectrons, E_G, x, y)} fill={C.electron} opacity={0.86} />
+          <path d={areaPath(valenceElectrons, 0, x, y)} fill={C.electron} opacity={0.86} />
+          <path d={areaBetweenPath(valenceElectrons, valenceStates, x, y)} fill={C.hole} opacity={0.9} />
+          <LinePath data={conductionStates} x={d => x(d.x)} y={d => y(d.y)} stroke={C.conduction} strokeWidth={2.5} />
+          <LinePath data={valenceStates} x={d => x(d.x)} y={d => y(d.y)} stroke="#243c55" strokeWidth={2.5} />
+          <line x1={x(0)} x2={x(1.5)} y1={y(fermiLevel)} y2={y(fermiLevel)} stroke={C.muted} strokeWidth={1.6} strokeDasharray="6 5" />
+          <text x={x(1.46)} y={y(fermiLevel) - 7} textAnchor="end" fill={C.muted} className="plot-annotation">E<tspan baselineShift="sub">F</tspan></text>
+        </>}
+      </Plot>
+      <Plot xDomain={[0, 1]} yDomain={[-0.72, 1.82]} xLabel="Probabilitat" yLabel="Energia E (eV)" xTicks={[0, 0.5, 1]} yTicks={[0, E_G]}>
+        {({ x, y }) => <>
+          <LinePath data={distribution} x={d => x(d.occupation)} y={d => y(d.energy)} stroke={C.fermi} strokeWidth={3} />
+          <LinePath data={distribution} x={d => x(d.vacancy)} y={d => y(d.energy)} stroke={C.hole} strokeWidth={3} />
+          <line x1={x(0)} x2={x(1)} y1={y(fermiLevel)} y2={y(fermiLevel)} stroke={C.muted} strokeWidth={1.7} strokeDasharray="6 5" />
+          <circle cx={x(0.5)} cy={y(fermiLevel)} r={4.5} fill={C.muted} stroke="white" strokeWidth={1.5} />
+          <text x={x(0.96)} y={y(fermiLevel) - 8} textAnchor="end" fill={C.muted} className="plot-annotation">E<tspan baselineShift="sub">F</tspan></text>
+        </>}
+      </Plot>
+    </div>
+  </Card>;
+}
+
 export function IntrinsicCarriers() {
   const [temperature, setTemperature] = useState(300);
   const count = Math.round(3 + 13 * (intrinsicDensity(temperature) / intrinsicDensity(700)) ** 0.35);

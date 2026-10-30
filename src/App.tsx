@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { Card } from './components/Card';
-import { BandAndDos, DopedStatistics, FermiDistribution, IntrinsicCarriers, ShockleyRegimes, ThermalDos } from './visualizations/Tema2';
+import { BandAndDos, DopedStatistics, ExtrinsicDos, FermiDistribution, IntrinsicCarriers, ShockleyRegimes, ThermalDos } from './visualizations/Tema2';
 import { BandFormation, EffectiveMass, PotentialAndOrbitals } from './visualizations/Tema1';
 import { TransportEquilibrium } from './visualizations/Tema3';
 import { MinorityCarriers } from './visualizations/Tema4';
@@ -66,6 +66,7 @@ export default function App() {
         </div>
         <div className="grid single lower-grid"><FermiDistribution /></div>
         <div className="grid single lower-grid"><ThermalDos /></div>
+        <div className="grid single lower-grid"><ExtrinsicDos /></div>
       </section>
 
       <section className="chapter" id="tema3">
