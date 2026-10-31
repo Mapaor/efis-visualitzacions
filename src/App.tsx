@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { Card } from './components/Card';
 import { DopedStatistics, ExtrinsicDos, FermiDistribution, FermiTemperatureShift, ShockleyRegimes, ThermalDos, ThermalStatisticsPanels } from './visualizations/Tema2';
 import { BandFormation, EffectiveMass, PotentialAndOrbitals } from './visualizations/Tema1';
-import { TransportEquilibrium } from './visualizations/Tema3';
+import { DriftVelocity, TransportEquilibrium } from './visualizations/Tema3';
 import { MinorityCarriers } from './visualizations/Tema4';
 import { DiodeCharacteristic, SchottkyCharacteristic } from './visualizations/Tema5';
 
@@ -74,6 +74,7 @@ export default function App() {
         </div>
         <div className="grid single">
           <Card tag="RELACIÓ D’EINSTEIN" title="Com competeixen deriva i difusió"><TransportEquilibrium /></Card>
+          <Card tag="VELOCITAT DE DERIVA · SATURACIÓ" title="Velocitat de deriva en funció del camp elèctric"><DriftVelocity /></Card>
         </div>
       </section>
 

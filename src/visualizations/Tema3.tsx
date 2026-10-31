@@ -43,3 +43,36 @@ export function TransportEquilibrium() {
     <Equation math="\frac{D_n}{\mu_n}=\frac{D_p}{\mu_p}=\frac{k_BT}{q}" />
   </>;
 }
+
+export function DriftVelocity() {
+  const [mobility, setMobility] = useState(800);
+  const saturationVelocity = 1e7; // cm/s
+  const fields = sample(160, 0, 50); // kV/cm
+  const velocityAt = (field: number) => {
+    const linearVelocity = mobility * field * 1e3; // (cm²/V·s)(V/cm)
+    return saturationVelocity * linearVelocity / (saturationVelocity + linearVelocity);
+  };
+  const drift = fields.map(field => ({ x: field, y: velocityAt(field) / 1e7 }));
+  const linear = [0, 10].map(field => ({ x: field, y: mobility * field * 1e3 / 1e7 }));
+  return <>
+    <Range label={<><i>μ</i> · mobilitat</>} value={mobility} min={200} max={1600} step={50} onChange={setMobility} formatValue={v => `${v} cm²/(V·s)`} />
+    <div className="chart-legend" aria-label="Llegenda de velocitat de deriva">
+      <span><i className="legend-line" style={{ borderColor: C.electron }} />Model amb saturació</span>
+      <span><i className="legend-line legend-dashed" style={{ borderColor: C.muted }} />Règim lineal v = μξ</span>
+    </div>
+    <Plot xDomain={[0, 50]} yDomain={[0, 1.2]} xLabel="Camp elèctric ξ (kV/cm)" yLabel="Velocitat de deriva ⟨vα⟩ (10⁷ cm/s)" xTicks={[0, 10, 20, 30, 40, 50]} yTicks={[0, 0.25, 0.5, 0.75, 1, 1.2]}>
+      {({ x, y, height }) => <>
+        <rect x={x(0)} y={0} width={x(10) - x(0)} height={height} fill={C.electron} opacity={0.055} />
+        <rect x={x(10)} y={0} width={x(30) - x(10)} height={height} fill={C.conduction} opacity={0.055} />
+        <rect x={x(30)} y={0} width={x(50) - x(30)} height={height} fill={C.teal} opacity={0.07} />
+        <text x={x(5)} y={y(1.12)} textAnchor="middle" className="plot-annotation" fill={C.electron}>Lineal</text>
+        <text x={x(20)} y={y(1.12)} textAnchor="middle" className="plot-annotation" fill={C.conduction}>Intermèdia</text>
+        <text x={x(40)} y={y(1.12)} textAnchor="middle" className="plot-annotation" fill={C.teal}>Saturació · fonons</text>
+        <LinePath data={linear} x={d => x(d.x)} y={d => y(Math.min(1.2, d.y))} stroke={C.muted} strokeWidth={2} strokeDasharray="6 5" />
+        <LinePath data={drift} x={d => x(d.x)} y={d => y(d.y)} stroke={C.electron} strokeWidth={3} />
+      </>}
+    </Plot>
+    <p className="plot-caption">A camp baix, la velocitat creix proporcionalment al camp i a la mobilitat. A camp alt, els xocs limiten la velocitat i la corba s’acosta a la saturació.</p>
+    <Equation math="\langle v_\alpha\rangle=\frac{\mu\,\xi}{1+\mu|\xi|/v_{\mathrm{sat}}},\qquad v_{\mathrm{sat}}\approx10^7\ \mathrm{cm/s}" />
+  </>;
+}
