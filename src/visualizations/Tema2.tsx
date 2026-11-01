@@ -771,8 +771,8 @@ export function DopedStatistics() {
       <Range label={<><i>M</i><sub>V</sub>(300 K) = p(E<sub>V</sub>)</>} value={logNv300} min={18} max={21} step={0.01} onChange={setLogNv300} formatValue={() => `${nv300.toExponential(2)} cm⁻³`} />
     </div>
     <div className="controls two-controls">
-      <Range label={<><i>E</i><sub>D</sub></>} value={donorLevel} min={E_G - 0.15} max={E_G - 0.01} step={0.001} onChange={setDonorLevel} formatValue={v => `${format(v, 3)} eV`} />
-      <Range label={<><i>E</i><sub>A</sub></>} value={acceptorLevel} min={0.01} max={0.15} step={0.001} onChange={setAcceptorLevel} formatValue={v => `${format(v, 3)} eV`} />
+      <Range label={<><i>E</i><sub>D</sub></>} value={donorLevel} min={E_G - 0.55} max={E_G - 0.01} step={0.001} onChange={setDonorLevel} formatValue={v => `${format(v, 3)} eV`} />
+      <Range label={<><i>E</i><sub>A</sub></>} value={acceptorLevel} min={0.01} max={0.55} step={0.001} onChange={setAcceptorLevel} formatValue={v => `${format(v, 3)} eV`} />
     </div>
     <Range label="Temperatura" value={temperature} min={200} max={700} step={10} onChange={setTemperature} formatValue={v => `${v} K`} />
     <div className="charge-sum-controls">
